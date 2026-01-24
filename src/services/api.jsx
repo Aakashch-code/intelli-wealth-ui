@@ -1,8 +1,8 @@
 // src/services/api.js
 import axios from 'axios';
 
-const API_BASE = 'https://intelliwealth-api.onrender.com';
-const AUTH_BASE = 'https://intelliwealth-api.onrender.com';
+const API_BASE = 'https://intelliwealth-api.onrender.com/api';
+const AUTH_BASE = 'https://intelliwealth-api.onrender.com/api';
 
 const api = axios.create({
     baseURL: API_BASE,
