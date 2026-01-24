@@ -32,8 +32,14 @@ import {
 const BORDER_STYLE = 'border border-white/10';
 const CARD_BASE = `bg-black ${BORDER_STYLE} rounded-2xl transition-all duration-300`;
 
-const formatMoney = (val = 0) =>
-    `₹${Number(val || 0).toLocaleString('en-IN', {
+// HELPER: Forces any input (null, undefined, string, NaN) to a valid number or 0
+const safeNumber = (val) => {
+    const num = Number(val);
+    return isNaN(num) ? 0 : num;
+};
+
+const formatMoney = (val) =>
+    `₹${safeNumber(val).toLocaleString('en-IN', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     })}`;
@@ -105,9 +111,12 @@ const TransactionRow = ({ transaction }) => {
 };
 
 const GoalBar = ({ goal }) => {
-    const current = Number(goal.currentAmount || goal.savedAmount || 0);
-    const target = Number(goal.targetAmount || 1);
-    const percentage = Math.min(100, Math.round((current / target) * 100));
+    const current = safeNumber(goal.currentAmount || goal.savedAmount);
+    const target = safeNumber(goal.targetAmount);
+    // Prevent division by zero if target is missing
+    const safeTarget = target === 0 ? 1 : target;
+
+    const percentage = Math.min(100, Math.round((current / safeTarget) * 100));
 
     return (
         <div className="group p-4 border border-zinc-900 hover:border-zinc-700 bg-zinc-950/30 rounded-xl transition-all">
@@ -135,7 +144,7 @@ const GoalBar = ({ goal }) => {
 const FinanceItemRow = ({ item, type = 'asset' }) => {
     const isDebt = type === 'debt';
     const Icon = isDebt ? CreditCard : PieChart;
-    const value = Number(item.value || item.currentValue || item.amount || 0);
+    const value = safeNumber(item.value || item.currentValue || item.amount);
 
     return (
         <div className="flex items-center justify-between p-3 hover:bg-zinc-900/50 rounded-lg transition-colors border border-transparent hover:border-zinc-800 group">
@@ -189,11 +198,11 @@ export default function Dashboard() {
                 debtsRes,
                 subsRes
             ] = await Promise.all([
-                fetchTransactions(),
-                fetchGoals(),
-                fetchAssets(),
-                fetchDebts(),
-                fetchSubscriptions()
+                fetchTransactions().catch(e => []), // Catch individual failures
+                fetchGoals().catch(e => []),
+                fetchAssets().catch(e => []),
+                fetchDebts().catch(e => []),
+                fetchSubscriptions().catch(e => [])
             ]);
 
             // 2. Fetch Summaries & Analytics
@@ -207,65 +216,72 @@ export default function Dashboard() {
                 fetchGoalStats()
             ]);
 
-            // --- Process Lists ---
+            // --- Process Lists (Unwrap safely) ---
             const txns = unwrap(txnsRes);
             const goals = unwrap(goalsRes);
             const assets = unwrap(assetsRes);
             const debts = unwrap(debtsRes);
             const subs = unwrap(subsRes);
 
-            // --- Robust Calculations & Fallbacks ---
+            // --- Robust Calculations (No NaN) ---
 
             // 1. Debts Total
-            const totalDebtsValue = debts.reduce((acc, curr) => acc + Number(curr.amount || curr.value || 0), 0);
+            const totalDebtsValue = Array.isArray(debts)
+                ? debts.reduce((acc, curr) => acc + safeNumber(curr.amount || curr.value), 0)
+                : 0;
 
             // 2. Assets Total (From List)
-            let totalAssetsFromList = assets.reduce((acc, curr) => acc + Number(curr.value || curr.amount || curr.currentValue || 0), 0);
+            let totalAssetsFromList = Array.isArray(assets)
+                ? assets.reduce((acc, curr) => acc + safeNumber(curr.value || curr.amount || curr.currentValue), 0)
+                : 0;
 
-            // 3. Net Worth (Prefer API)
+            // 3. Net Worth (Prefer API, Strict Fallback)
             let netWorth = 0;
             if (netWorthRes.status === 'fulfilled') {
                 const nwData = unwrap(netWorthRes.value);
-                netWorth = nwData?.netWorth || nwData || 0;
+                // Handle if nwData is an object { netWorth: 1000 } or just a number 1000
+                const rawVal = nwData?.netWorth !== undefined ? nwData.netWorth : nwData;
+                netWorth = safeNumber(rawVal);
             } else {
                 // Fallback: Assets - Debts
                 netWorth = totalAssetsFromList - totalDebtsValue;
             }
 
-            // 4. Gross Assets (Final Logic)
-            // Assets = Net Worth + Liabilities
+            // 4. Gross Assets (Assets = Net Worth + Liabilities)
             let grossAssets = totalAssetsFromList;
             if (grossAssets === 0 && netWorth !== 0) {
                 grossAssets = netWorth + totalDebtsValue;
             }
+            grossAssets = safeNumber(grossAssets);
 
-            // 5. Cash Flow
+            // 5. Cash Flow (Net Amount)
             let netAmount = 0;
             if (txnSummaryRes.status === 'fulfilled') {
                 const data = unwrap(txnSummaryRes.value);
-                if (data.balance !== undefined) netAmount = data.balance;
+                if (data?.balance !== undefined) netAmount = safeNumber(data.balance);
                 else if (typeof data === 'number') netAmount = data;
+                else netAmount = 0; // Ensure it doesn't stay undefined
             }
 
-            // Fallback for Cash Flow
-            if (netAmount === 0 && txns.length > 0) {
+            // Fallback for Cash Flow if API returned 0 or failed, try calculating manually
+            if (netAmount === 0 && Array.isArray(txns) && txns.length > 0) {
                 const income = txns
                     .filter(t => (t.type || '').toLowerCase() === 'income')
-                    .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+                    .reduce((acc, t) => acc + safeNumber(t.amount), 0);
                 const expense = txns
                     .filter(t => (t.type || '').toLowerCase() === 'expense')
-                    .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+                    .reduce((acc, t) => acc + safeNumber(t.amount), 0);
                 netAmount = income - expense;
             }
 
             // 6. Subscriptions
             const activeSubsList = Array.isArray(subs) ? subs.filter(s => s.active) : [];
-            const subscriptionCost = activeSubsList.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+            const subscriptionCost = activeSubsList.reduce((acc, curr) => acc + safeNumber(curr.amount), 0);
 
             // 7. Goal Stats
             const gStats = goalStatsRes.status === 'fulfilled' ? unwrap(goalStatsRes.value) : {};
-            const goalCompleted = gStats.completedGoals || 0;
-            const goalTotal = gStats.totalGoals || goals.length || 0;
+            const goalCompleted = safeNumber(gStats.completedGoals);
+            const goalTotal = safeNumber(gStats.totalGoals) || (Array.isArray(goals) ? goals.length : 0);
 
             setDashboardData({
                 netWorth,
@@ -277,11 +293,13 @@ export default function Dashboard() {
                 goals: Array.isArray(goals) ? goals.slice(0, 3) : [],
                 assets: Array.isArray(assets) ? assets.slice(0, 4) : [],
                 debts: Array.isArray(debts) ? debts.slice(0, 4) : [],
-                grossAssets // Validated value
+                grossAssets
             });
 
         } catch (error) {
             console.error("Dashboard Load Error:", error);
+            // Even on error, ensure we show 0, not NaN
+            setDashboardData(prev => ({ ...prev, netWorth: 0, netAmount: 0 }));
         } finally {
             setLoading(false);
         }
@@ -318,7 +336,7 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* TOP STATS ROW - ADJUSTED TO 3 COLS */}
+            {/* TOP STATS ROW */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <StatCard
                     icon={Landmark}
