@@ -34,7 +34,7 @@ export const registerUser = (userData) =>
 
 // Correct
 export const loginUser = (loginData) =>
-    axios.post('https://intelliwealth-api.onrender.com/api', loginData);
+    axios.post('https://intelliwealth-api.onrender.com/api/auth', loginData);
 
 export const logoutUser = () => {
     localStorage.removeItem('token');
