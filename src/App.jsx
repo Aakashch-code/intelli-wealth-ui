@@ -25,6 +25,7 @@ import NetWorth from "./pages/wealth/NetWorth.jsx";
 // Protection
 import Insurance from "./pages/protection/Insurance.jsx";
 import Contingency from "./pages/protection/Contingency.jsx";
+import Register from "./pages/authentication/Register.jsx";
 
 // --- Layout Wrapper ---
 // This component handles showing/hiding the sidebar based on the current URL
@@ -60,6 +61,7 @@ function App() {
                 <Routes>
                     {/* --- Public Routes --- */}
                     <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
 
                     {/* --- Protected Routes --- */}
                     <Route path="/" element={<Dashboard />} />

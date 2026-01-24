@@ -1,8 +1,6 @@
 // src/services/api.js
 import axios from 'axios';
-
-const API_BASE = 'https://intelliwealth-api.onrender.com/api'; //
-const AUTH_BASE = 'https://intelliwealth-api.onrender.com/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 const api = axios.create({
     baseURL: API_BASE,
@@ -17,7 +15,7 @@ const api = axios.create({
 // This runs before EVERY request. It grabs the token and attaches it.
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token'); // We assume you save it here after login
+        const token = localStorage.getItem('token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -30,17 +28,10 @@ api.interceptors.request.use(
    AUTHENTICATION (Login & Register)
    ================================================================= */
 export const registerUser = (userData) =>
-    axios.post(`${AUTH_BASE}/register`, userData);
+    api.post('/auth/register', userData);
 
-// Correct
 export const loginUser = (loginData) =>
-    axios.post('https://intelliwealth-api.onrender.com/auth/login', loginData);
-
-export const logoutUser = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/login'; // Redirect to login page
-};
-
+    api.post('/auth/login', loginData);
 
 /* =================================================================
    TREASURY (Budgets, Goals, Subscriptions, Transactions)

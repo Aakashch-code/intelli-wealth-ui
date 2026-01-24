@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { loginUser } from '../../services/api.jsx';
-import { User, Lock, LogIn, Loader2, AlertCircle, ArrowRight, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
+import { loginUser } from '../../services/api'; // Ensure path is correct
+import { User, Lock, LogIn, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom'; // Assuming you use react-router-dom
 
 export default function Login() {
-    // --- Standard Login State ---
     const [formData, setFormData] = useState({
         login: '',
         password: ''
@@ -11,11 +11,6 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // --- Developer / Test Mode State ---
-    const [showDevTools, setShowDevTools] = useState(false);
-    const [manualToken, setManualToken] = useState('');
-
-    // --- Standard Handlers ---
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
         if (error) setError('');
@@ -28,9 +23,6 @@ export default function Login() {
 
         try {
             const response = await loginUser(formData);
-
-            // Destructure possible fields from your API response
-            // Adjust this based on what your specific API actually returns
             const { token, user, name, username } = response.data;
 
             if (token) {
@@ -38,25 +30,25 @@ export default function Login() {
                 localStorage.setItem('token', token);
 
                 // 2. Determine Display Name
-                // Priority: user object name > direct name > direct username > what user typed in form
-                let displayName = formData.login; // Default fallback
-
+                let displayName = formData.login;
                 if (user && user.name) displayName = user.name;
                 else if (name) displayName = name;
                 else if (user && user.username) displayName = user.username;
                 else if (username) displayName = username;
 
-                // 3. Save Name for Sidebar to use
                 localStorage.setItem('userName', displayName);
 
-                // 4. Redirect
+                // 3. Redirect
                 window.location.href = '/';
             } else {
                 setError('Login failed: No token received.');
             }
         } catch (err) {
             console.error("Login Error:", err);
-            if (err.response && err.response.status === 401) {
+            // Handle specific backend error messages if available
+            if (err.response && err.response.data && err.response.data.message) {
+                setError(err.response.data.message);
+            } else if (err.response && err.response.status === 401) {
                 setError('Invalid username or password.');
             } else {
                 setError('Something went wrong. Please try again.');
@@ -64,18 +56,6 @@ export default function Login() {
         } finally {
             setLoading(false);
         }
-    };
-
-    // --- Developer Handler ---
-    const handleManualLogin = () => {
-        if (!manualToken.trim()) {
-            setError('Please enter a token first.');
-            return;
-        }
-        // Force save token and dummy name
-        localStorage.setItem('token', manualToken.trim());
-        localStorage.setItem('userName', 'Dev User'); // Set a default name for Dev mode
-        window.location.href = '/';
     };
 
     return (
@@ -115,6 +95,7 @@ export default function Login() {
                                 value={formData.login}
                                 onChange={handleChange}
                                 placeholder="Enter your ID"
+                                required
                                 className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 transition-all"
                             />
                         </div>
@@ -132,6 +113,7 @@ export default function Login() {
                                 value={formData.password}
                                 onChange={handleChange}
                                 placeholder="••••••••"
+                                required
                                 className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:bg-zinc-900 transition-all"
                             />
                         </div>
@@ -156,47 +138,14 @@ export default function Login() {
                     </button>
                 </form>
 
-                <div className="mt-8 text-center pb-4 border-b border-white/5">
+                <div className="mt-8 text-center">
                     <p className="text-zinc-600 text-sm">
                         Don't have an account?{' '}
-                        <a href="/register" className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+                        <Link to="/register" className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
                             Create one
-                        </a>
+                        </Link>
                     </p>
                 </div>
-
-                {/* Developer / Test Mode Section */}
-                <div className="mt-6">
-                    <button
-                        onClick={() => setShowDevTools(!showDevTools)}
-                        className="w-full flex items-center justify-between px-4 py-2 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 transition-all"
-                    >
-                        <div className="flex items-center gap-2">
-                            <Terminal className="w-3 h-3" />
-                            <span className="uppercase tracking-wider font-bold">Developer Override</span>
-                        </div>
-                        {showDevTools ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    </button>
-
-                    {showDevTools && (
-                        <div className="mt-3 p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl animate-in slide-in-from-top-2">
-                            <p className="text-xs text-zinc-500 mb-2">Paste a valid raw Bearer token to bypass login:</p>
-                            <textarea
-                                value={manualToken}
-                                onChange={(e) => setManualToken(e.target.value)}
-                                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                                className="w-full h-20 bg-black border border-zinc-800 rounded-lg p-2 text-[10px] font-mono text-emerald-500 focus:outline-none focus:border-emerald-500/50 resize-none mb-3"
-                            />
-                            <button
-                                onClick={handleManualLogin}
-                                className="w-full bg-zinc-800 hover:bg-emerald-900/30 hover:text-emerald-400 text-zinc-400 text-xs font-bold py-2 rounded-lg transition-colors border border-transparent hover:border-emerald-500/20"
-                            >
-                                Force Auth with Token
-                            </button>
-                        </div>
-                    )}
-                </div>
-
             </div>
         </div>
     );
