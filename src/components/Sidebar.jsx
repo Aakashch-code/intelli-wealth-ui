@@ -8,6 +8,7 @@ import {
     AcademicCapIcon, HeartIcon, TrophyIcon, BuildingLibraryIcon, SparklesIcon, ShoppingBagIcon,
     ChevronDownIcon, ChevronRightIcon, Bars3Icon, XMarkIcon, ArrowRightOnRectangleIcon
 } from "@heroicons/react/24/outline";
+import {ToolCase} from "lucide-react";
 
 // Organize links into logical groups
 const MENU_GROUPS = [
@@ -49,6 +50,7 @@ const MENU_GROUPS = [
     {
         title: "Tools & Insights",
         items: [
+            { to: "/reports" , icon: ToolCase,label: "Reports"},
             { to: "/tax-planning", icon: CalculatorIcon, label: "Tax Planning" },
             { to: "/cash-flow", icon: ArrowTrendingUpIcon, label: "Cash Flow" },
             { to: "/expense-analyzer", icon: ChartBarIcon, label: "Analyzer" },

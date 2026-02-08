@@ -26,6 +26,7 @@ import NetWorth from "./pages/wealth/NetWorth.jsx";
 import Insurance from "./pages/protection/Insurance.jsx";
 import Contingency from "./pages/protection/Contingency.jsx";
 import Register from "./pages/authentication/Register.jsx";
+import Reports from "./pages/tool/Reports.jsx";
 
 // --- Layout Wrapper ---
 // This component handles showing/hiding the sidebar based on the current URL
@@ -85,6 +86,7 @@ function App() {
                     <Route path="/fynix" element={<FynixAI />} />
                     <Route path="/chat" element={<FynixAI />} />
 
+                    <Route path="/reports" element={<Reports />} />
                     {/* --- 404 Fallback --- */}
                     <Route path="*" element={
                         <div className="flex flex-col items-center justify-center h-[80vh] text-center px-4">

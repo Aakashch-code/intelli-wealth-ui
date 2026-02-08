@@ -208,6 +208,63 @@ export const fetchFinancialHealth = () =>
    ================================================================= */
 export const sendChat = (query) =>
     api.post('/chat', { query });
+/* =================================================================
+   PDF EXPORTS
+   ================================================================= */
+
+// Helper for downloading PDFs
+const downloadPdf = async (url, filename) => {
+    const response = await api.get(url, {
+        responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], {
+        type: 'application/pdf',
+    });
+
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+
+/* --- Budget PDF --- */
+export const exportBudgetsPdf = () =>
+    downloadPdf('/budget/export/pdf', `budget_${Date.now()}.pdf`);
+
+
+/* --- Goal PDF --- */
+export const exportGoalsPdf = () =>
+    downloadPdf('/goal/export/pdf', `goal_${Date.now()}.pdf`);
+
+
+/* --- Subscription PDF --- */
+export const exportSubscriptionsPdf = () =>
+    downloadPdf('/subscription/export/pdf', `subscription_${Date.now()}.pdf`);
+
+
+/* --- Transaction PDF --- */
+export const exportTransactionsPdf = () =>
+    downloadPdf('/transactions/export/pdf', `transactions_${Date.now()}.pdf`);
+
+
+/* --- Asset PDF --- */
+export const exportAssetsPdf = () =>
+    downloadPdf('/asset/export/pdf', `asset_${Date.now()}.pdf`);
+
+
+/* --- Debt PDF --- */
+export const exportDebtsPdf = () =>
+    downloadPdf('/debt/export/pdf', `debt_${Date.now()}.pdf`);
+
+
+/* --- Insurance PDF --- */
+export const exportInsurancePdf = () =>
+    downloadPdf('/insurance/export/pdf', `insurance_${Date.now()}.pdf`);
 
 
 export default api;
