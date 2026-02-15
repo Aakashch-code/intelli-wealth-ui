@@ -38,9 +38,15 @@ export const loginUser = (loginData) =>
    ================================================================= */
 
 /* --- Budgets --- */
-export const fetchBudgets = () =>
-    api.get('/budget');
+// In your api.jsx
+export const fetchBudgets = (page = 0, size = 12) => {
+    return api.get('/budget', { params: { page, size } });
+};
 
+// Add this so we get accurate totals across ALL pages
+export const fetchBudgetStats = () => {
+    return api.get('/budget/summary');
+};
 export const fetchBudgetById = (id) =>
     api.get(`/budget/${id}`);
 
@@ -58,9 +64,10 @@ export const fetchBudgetSummary = () =>
 
 
 /* --- Goals --- */
-export const fetchGoals = () =>
-    api.get('/goal');
-
+// In your api.jsx
+export const fetchGoals = (page = 0, size = 12) => {
+    return api.get('/goal', { params: { page, size } });
+};
 export const fetchGoalById = (id) =>
     api.get(`/goal/${id}`);
 
@@ -81,8 +88,9 @@ export const fetchGoalStats = () =>
 
 
 /* --- Subscriptions --- */
-export const fetchSubscriptions = (active = null) => {
-    const params = active !== null ? { active } : {};
+export const fetchSubscriptions = (active = null, page = 0, size = 12) => {
+    const params = { page, size };
+    if (active !== null) params.active = active;
     return api.get('/subscriptions', { params });
 };
 
@@ -97,6 +105,9 @@ export const toggleSubscription = (id) =>
 
 export const deleteSubscription = (id) =>
     api.delete(`/subscriptions/${id}`);
+
+export const fetchSubscriptionStats= (id) =>
+    api.get("/subscriptions/stat")
 
 
 /* --- Transactions --- */
@@ -206,8 +217,17 @@ export const fetchFinancialHealth = () =>
 /* =================================================================
    Chat / AI
    ================================================================= */
-export const sendChat = (query) =>
-    api.post('/chat', { query });
+export const sendChat = (data) =>
+    api.post("/v1/fynix/chat", {
+        query: data.message,
+        conversationId: data.conversationId
+    });
+
+export const getChatHistory = () =>
+    api.get("/v1/fynix/history");
+
+export const getConversation = (id) =>
+    api.get(`/v1/fynix/history/conversation/${id}`);
 /* =================================================================
    PDF EXPORTS
    ================================================================= */

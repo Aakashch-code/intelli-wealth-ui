@@ -10,29 +10,32 @@ import {
     Activity,
     Trophy,
     PieChart,
-    Landmark
+    Landmark,
+    ShieldCheck,
+    Calendar // Added Calendar icon
 } from 'lucide-react';
 
-// Import services
+// Import services (Removed exportTransactionsPdf)
 import {
     fetchGoals,
-    fetchSubscriptions,
     fetchTransactions,
     fetchAssets,
+    fetchDebts,
     fetchNetWorth,
     fetchGoalStats,
     fetchTransactionNetAmount,
-    fetchDebts
+    fetchDebtStats,
+    allAssetsAmount,
+    fetchActivePolicies
 } from '../services/api';
 
 // ============================================================================
 // UTILS & STYLES
 // ============================================================================
 
-const BORDER_STYLE = 'border border-white/10';
-const CARD_BASE = `bg-black ${BORDER_STYLE} rounded-2xl transition-all duration-300`;
+const BORDER_STYLE = 'border border-zinc-800/60';
+const CARD_BASE = `bg-zinc-950/50 ${BORDER_STYLE} rounded-2xl backdrop-blur-sm transition-all duration-300`;
 
-// HELPER: Forces any input (null, undefined, string, NaN) to a valid number or 0
 const safeNumber = (val) => {
     const num = Number(val);
     return isNaN(num) ? 0 : num;
@@ -44,7 +47,12 @@ const formatMoney = (val) =>
         maximumFractionDigits: 0
     })}`;
 
-const unwrap = (res) => (res && res.data ? res.data : res || []);
+const getTodayDateString = () => {
+    const date = new Date();
+    const weekday = date.toLocaleDateString('en-GB', { weekday: 'short' });
+    const rest = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    return `${weekday}, ${rest}`;
+};
 
 // ============================================================================
 // SUB-COMPONENTS
@@ -52,112 +60,86 @@ const unwrap = (res) => (res && res.data ? res.data : res || []);
 
 const StatCard = ({ icon: Icon, title, value, subtitle, badge, colorTheme = 'emerald' }) => {
     const themes = {
-        emerald: { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'hover:border-emerald-500/50', glow: 'hover:shadow-[0_0_30px_-10px_rgba(16,185,129,0.3)]' },
-        rose:    { text: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'hover:border-rose-500/50',    glow: 'hover:shadow-[0_0_30px_-10px_rgba(244,63,94,0.3)]' },
-        violet:  { text: 'text-violet-400',  bg: 'bg-violet-500/10',  border: 'hover:border-violet-500/50',  glow: 'hover:shadow-[0_0_30px_-10px_rgba(139,92,246,0.3)]' },
-        amber:   { text: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'hover:border-amber-500/50',   glow: 'hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.3)]' },
-        blue:    { text: 'text-blue-400',    bg: 'bg-blue-500/10',    border: 'hover:border-blue-500/50',    glow: 'hover:shadow-[0_0_30px_-10px_rgba(59,130,246,0.3)]' }
+        emerald: { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'hover:border-emerald-500/30', glow: 'hover:shadow-[0_8px_30px_-12px_rgba(16,185,129,0.2)]' },
+        rose:    { text: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'hover:border-rose-500/30',    glow: 'hover:shadow-[0_8px_30px_-12px_rgba(244,63,94,0.2)]' },
+        violet:  { text: 'text-violet-400',  bg: 'bg-violet-500/10',  border: 'hover:border-violet-500/30',  glow: 'hover:shadow-[0_8px_30px_-12px_rgba(139,92,246,0.2)]' },
+        amber:   { text: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'hover:border-amber-500/30',   glow: 'hover:shadow-[0_8px_30px_-12px_rgba(245,158,11,0.2)]' },
+        blue:    { text: 'text-blue-400',    bg: 'bg-blue-500/10',    border: 'hover:border-blue-500/30',    glow: 'hover:shadow-[0_8px_30px_-12px_rgba(59,130,246,0.2)]' }
     };
-
     const theme = themes[colorTheme] || themes.emerald;
 
     return (
-        <div className={`${CARD_BASE} p-6 ${theme.border} ${theme.glow} group cursor-pointer relative overflow-hidden`}>
-            <div className="flex justify-between items-start mb-6">
-                <div className={`p-2.5 rounded-lg ${theme.bg} ${theme.text}`}>
+        <div className={`${CARD_BASE} p-6 ${theme.border} ${theme.glow} group relative overflow-hidden flex flex-col justify-between h-full`}>
+            <div className="flex justify-between items-start mb-4">
+                <div className={`p-3 rounded-xl ${theme.bg} ${theme.text} ring-1 ring-white/5 group-hover:scale-110 transition-transform duration-300`}>
                     <Icon className="w-5 h-5" />
                 </div>
                 {badge && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 border border-zinc-800 px-2 py-1 rounded-md">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-full">
                         {badge}
                     </span>
                 )}
             </div>
-            <div className="space-y-1">
-                <p className="text-zinc-500 text-xs font-medium uppercase tracking-wide">{title}</p>
+            <div className="space-y-1.5 mt-2">
+                <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">{title}</p>
                 <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
             </div>
-            <div className="mt-4 flex items-center text-xs text-zinc-500">{subtitle}</div>
+            {subtitle && (
+                <div className="mt-4 flex items-center text-xs font-medium text-zinc-500">
+                    {subtitle}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const LiabilityCard = ({ debt }) => {
+    const displayAmount = safeNumber(debt.amount || debt.outstandingAmount || debt.balance);
+
+    return (
+        <div className={`${CARD_BASE} p-5 hover:border-rose-500/30 hover:bg-zinc-900/50 transition-all group cursor-default`}>
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-1">
+                        {debt.category || 'Liability'}
+                    </p>
+                    <p className="text-zinc-200 font-medium group-hover:text-rose-400 transition-colors">
+                        {debt.name || debt.institution}
+                    </p>
+                </div>
+                <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500 ring-1 ring-rose-500/20">
+                    <CreditCard className="w-4 h-4" />
+                </div>
+            </div>
+            <p className="text-2xl font-mono text-white tracking-tight">
+                {formatMoney(displayAmount)}
+            </p>
         </div>
     );
 };
 
 const TransactionRow = ({ transaction }) => {
-    const type = (transaction.type || '').toLowerCase();
-    const isIncome = type === 'income';
+    const isIncome = (transaction.type || '').toLowerCase() === 'income';
     const Icon = isIncome ? ArrowUp : ArrowDown;
-    const dateStr = transaction.date || transaction.createdAt;
 
     return (
-        <div className="group flex items-center justify-between p-4 hover:bg-zinc-900/50 rounded-xl transition-colors border border-transparent hover:border-zinc-800 cursor-pointer">
+        <div className="group flex items-center justify-between p-4 hover:bg-zinc-900/80 transition-colors cursor-pointer border-b border-white/5 last:border-0">
             <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full border border-zinc-800 flex items-center justify-center bg-black ${isIncome ? 'group-hover:border-emerald-500/30' : 'group-hover:border-rose-500/30'} transition-colors`}>
-                    <Icon className={`w-4 h-4 ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`} />
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${isIncome ? 'bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20' : 'bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20'} transition-colors`}>
+                    <Icon className="w-5 h-5" />
                 </div>
                 <div>
-                    <p className="text-sm font-medium text-white group-hover:text-zinc-200 transition-colors">
-                        {transaction.description || 'Untitled Transaction'}
+                    <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition-colors">
+                        {transaction.description || 'Untitled'}
                     </p>
-                    <p className="text-xs text-zinc-600">
-                        {dateStr ? new Date(dateStr).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : '-'}
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                        {new Date(transaction.date || transaction.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </p>
                 </div>
             </div>
-            <span className={`font-mono font-medium ${isIncome ? 'text-emerald-400' : 'text-white'}`}>
+            <span className={`font-mono text-sm font-medium ${isIncome ? 'text-emerald-400' : 'text-zinc-300'}`}>
                 {isIncome ? '+' : '-'}{formatMoney(transaction.amount)}
             </span>
-        </div>
-    );
-};
-
-const GoalBar = ({ goal }) => {
-    const current = safeNumber(goal.currentAmount || goal.savedAmount);
-    const target = safeNumber(goal.targetAmount);
-    // Prevent division by zero if target is missing
-    const safeTarget = target === 0 ? 1 : target;
-
-    const percentage = Math.min(100, Math.round((current / safeTarget) * 100));
-
-    return (
-        <div className="group p-4 border border-zinc-900 hover:border-zinc-700 bg-zinc-950/30 rounded-xl transition-all">
-            <div className="flex justify-between items-end mb-3">
-                <div>
-                    <h4 className="text-sm font-medium text-white mb-1">{goal.name}</h4>
-                    <p className="text-xs text-zinc-500">
-                        Target: <span className="text-zinc-300">{formatMoney(target)}</span>
-                    </p>
-                </div>
-                <span className={`text-xs font-mono px-2 py-1 rounded ${percentage >= 100 ? 'text-emerald-400 bg-emerald-900/20' : 'text-blue-400 bg-blue-900/20'}`}>
-                    {percentage}%
-                </span>
-            </div>
-            <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                <div
-                    className={`h-full transition-all duration-1000 ease-out ${percentage >= 100 ? 'bg-emerald-400' : 'bg-blue-500'}`}
-                    style={{ width: `${percentage}%` }}
-                />
-            </div>
-        </div>
-    );
-};
-
-const FinanceItemRow = ({ item, type = 'asset' }) => {
-    const isDebt = type === 'debt';
-    const Icon = isDebt ? CreditCard : PieChart;
-    const value = safeNumber(item.value || item.currentValue || item.amount);
-
-    return (
-        <div className="flex items-center justify-between p-3 hover:bg-zinc-900/50 rounded-lg transition-colors border border-transparent hover:border-zinc-800 group">
-            <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded bg-zinc-900 flex items-center justify-center ${isDebt ? 'text-rose-400' : 'text-emerald-400'} group-hover:text-white transition-colors`}>
-                    <Icon className="w-4 h-4" />
-                </div>
-                <div>
-                    <p className="text-sm font-medium text-zinc-200">{item.name || item.institution || 'Unnamed Item'}</p>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{item.category || item.type || type}</p>
-                </div>
-            </div>
-            <p className="text-sm font-mono text-white">{formatMoney(value)}</p>
         </div>
     );
 };
@@ -169,299 +151,265 @@ const FinanceItemRow = ({ item, type = 'asset' }) => {
 export default function Dashboard() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
-
-    const [dashboardData, setDashboardData] = useState({
+    const [data, setData] = useState({
         netWorth: 0,
-        netAmount: 0,
-        activeSubscriptions: 0,
-        subscriptionCost: 0,
-        goalStats: { completed: 0, total: 0 },
+        cashFlow: 0,
+        grossAssets: 0,
+        activeInsurances: 0,
+        goalProgress: { completed: 0, total: 0 },
         recentTransactions: [],
-        goals: [],
-        assets: [],
-        debts: [],
-        grossAssets: 0
+        recentGoals: [],
+        recentAssets: [],
+        recentDebts: [],
+        debtTotal: 0
     });
 
     useEffect(() => {
-        loadDashboardData();
+        loadData().catch(console.error);
     }, []);
 
-    const loadDashboardData = async () => {
+    const loadData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Lists & Basics
-            const [
-                txnsRes,
-                goalsRes,
-                assetsRes,
-                debtsRes,
-                subsRes
-            ] = await Promise.all([
-                fetchTransactions().catch(e => []), // Catch individual failures
-                fetchGoals().catch(e => []),
-                fetchAssets().catch(e => []),
-                fetchDebts().catch(e => []),
-                fetchSubscriptions().catch(e => [])
-            ]);
-
-            // 2. Fetch Summaries & Analytics
-            const [
-                netWorthRes,
-                txnSummaryRes,
-                goalStatsRes
-            ] = await Promise.allSettled([
+            const results = await Promise.allSettled([
                 fetchNetWorth(),
                 fetchTransactionNetAmount(),
-                fetchGoalStats()
+                allAssetsAmount(),
+                fetchActivePolicies(),
+                fetchGoalStats(),
+                fetchTransactions("", 0),
+                fetchGoals(0, 3),
+                fetchAssets(),
+                fetchDebts(),
+                fetchDebtStats()
             ]);
 
-            // --- Process Lists (Unwrap safely) ---
-            const txns = unwrap(txnsRes);
-            const goals = unwrap(goalsRes);
-            const assets = unwrap(assetsRes);
-            const debts = unwrap(debtsRes);
-            const subs = unwrap(subsRes);
+            const resolve = (idx) => {
+                const res = results[idx].status === 'fulfilled' ? results[idx].value : null;
+                return res?.data || res;
+            };
 
-            // --- Robust Calculations (No NaN) ---
+            const txnSummary = resolve(1);
+            const debtStats = resolve(9);
 
-            // 1. Debts Total
-            const totalDebtsValue = Array.isArray(debts)
-                ? debts.reduce((acc, curr) => acc + safeNumber(curr.amount || curr.value), 0)
-                : 0;
-
-            // 2. Assets Total (From List)
-            let totalAssetsFromList = Array.isArray(assets)
-                ? assets.reduce((acc, curr) => acc + safeNumber(curr.value || curr.amount || curr.currentValue), 0)
-                : 0;
-
-            // 3. Net Worth (Prefer API, Strict Fallback)
-            let netWorth = 0;
-            if (netWorthRes.status === 'fulfilled') {
-                const nwData = unwrap(netWorthRes.value);
-                // Handle if nwData is an object { netWorth: 1000 } or just a number 1000
-                const rawVal = nwData?.netWorth !== undefined ? nwData.netWorth : nwData;
-                netWorth = safeNumber(rawVal);
-            } else {
-                // Fallback: Assets - Debts
-                netWorth = totalAssetsFromList - totalDebtsValue;
-            }
-
-            // 4. Gross Assets (Assets = Net Worth + Liabilities)
-            let grossAssets = totalAssetsFromList;
-            if (grossAssets === 0 && netWorth !== 0) {
-                grossAssets = netWorth + totalDebtsValue;
-            }
-            grossAssets = safeNumber(grossAssets);
-
-            // 5. Cash Flow (Net Amount)
-            let netAmount = 0;
-            if (txnSummaryRes.status === 'fulfilled') {
-                const data = unwrap(txnSummaryRes.value);
-                if (data?.balance !== undefined) netAmount = safeNumber(data.balance);
-                else if (typeof data === 'number') netAmount = data;
-                else netAmount = 0; // Ensure it doesn't stay undefined
-            }
-
-            // Fallback for Cash Flow if API returned 0 or failed, try calculating manually
-            if (netAmount === 0 && Array.isArray(txns) && txns.length > 0) {
-                const income = txns
-                    .filter(t => (t.type || '').toLowerCase() === 'income')
-                    .reduce((acc, t) => acc + safeNumber(t.amount), 0);
-                const expense = txns
-                    .filter(t => (t.type || '').toLowerCase() === 'expense')
-                    .reduce((acc, t) => acc + safeNumber(t.amount), 0);
-                netAmount = income - expense;
-            }
-
-            // 6. Subscriptions
-            const activeSubsList = Array.isArray(subs) ? subs.filter(s => s.active) : [];
-            const subscriptionCost = activeSubsList.reduce((acc, curr) => acc + safeNumber(curr.amount), 0);
-
-            // 7. Goal Stats
-            const gStats = goalStatsRes.status === 'fulfilled' ? unwrap(goalStatsRes.value) : {};
-            const goalCompleted = safeNumber(gStats.completedGoals);
-            const goalTotal = safeNumber(gStats.totalGoals) || (Array.isArray(goals) ? goals.length : 0);
-
-            setDashboardData({
-                netWorth,
-                netAmount,
-                activeSubscriptions: activeSubsList.length,
-                subscriptionCost,
-                goalStats: { completed: goalCompleted, total: goalTotal },
-                recentTransactions: Array.isArray(txns) ? txns.slice(0, 5) : [],
-                goals: Array.isArray(goals) ? goals.slice(0, 3) : [],
-                assets: Array.isArray(assets) ? assets.slice(0, 4) : [],
-                debts: Array.isArray(debts) ? debts.slice(0, 4) : [],
-                grossAssets
+            setData({
+                netWorth: safeNumber(resolve(0)?.netWorth ?? resolve(0)),
+                cashFlow: safeNumber(txnSummary?.netSavings ?? 0),
+                grossAssets: safeNumber(resolve(2)?.totalValue ?? resolve(2)),
+                activeInsurances: Array.isArray(resolve(3)) ? resolve(3).length : 0,
+                goalProgress: {
+                    completed: safeNumber(resolve(4)?.completedGoals),
+                    total: safeNumber(resolve(4)?.totalGoals)
+                },
+                recentTransactions: resolve(5)?.content || (Array.isArray(resolve(5)) ? resolve(5).slice(0, 5) : []),
+                recentGoals: resolve(6)?.content || (Array.isArray(resolve(6)) ? resolve(6) : []),
+                recentAssets: Array.isArray(resolve(7)) ? resolve(7).slice(0, 4) : [],
+                recentDebts: Array.isArray(resolve(8)) ? resolve(8).slice(0, 4) : [],
+                debtTotal: safeNumber(debtStats?.totalOutstandingAmount ?? 0)
             });
-
-        } catch (error) {
-            console.error("Dashboard Load Error:", error);
-            // Even on error, ensure we show 0, not NaN
-            setDashboardData(prev => ({ ...prev, netWorth: 0, netAmount: 0 }));
+        } catch (err) {
+            console.error("Dashboard Load Error:", err);
         } finally {
             setLoading(false);
         }
     };
 
     if (loading) return (
-        <div className="min-h-screen bg-black p-6 md:p-10 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-                <div className="w-8 h-8 border-2 border-zinc-800 border-t-emerald-500 rounded-full animate-spin"></div>
-                <p className="text-zinc-500 animate-pulse font-mono text-sm">Syncing Wealth Data...</p>
+        <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
+            <div className="relative w-12 h-12 flex items-center justify-center mb-6">
+                <div className="absolute inset-0 border-2 border-zinc-800 rounded-xl"></div>
+                <div className="absolute inset-0 border-2 border-emerald-500 rounded-xl animate-[spin_2s_linear_infinite] border-t-transparent border-r-transparent"></div>
+                <Activity className="w-5 h-5 text-emerald-500 animate-pulse" />
             </div>
+            <p className="text-zinc-500 font-mono text-xs uppercase tracking-[0.2em]">Syncing Treasury...</p>
         </div>
     );
 
-    const {
-        netWorth, netAmount,
-        goalStats, recentTransactions,
-        goals, assets, debts, grossAssets
-    } = dashboardData;
-
-    const isPositiveCashFlow = netAmount >= 0;
-
     return (
-        <div className="min-h-screen bg-black text-zinc-100 p-6 md:p-10 font-sans selection:bg-emerald-500/30">
-            {/* Header */}
-            <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="min-h-screen bg-[#00a0a] text-zinc-100 p-6 md:p-8 lg:p-12">
+
+            {/* HEADER */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                 <div>
-                    <h2 className="text-4xl font-bold text-white tracking-tight mb-2">Dashboard</h2>
-                    <p className="text-zinc-500 text-lg">Financial Overview</p>
+                    <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-white mb-2">IntelliWealth</h1>
+                    <p className="text-sm font-medium text-zinc-500 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Financial Command Center
+                    </p>
                 </div>
-                <div className="text-right hidden md:block">
-                    <p className="text-xs text-zinc-600 uppercase tracking-widest font-bold mb-1">Today</p>
-                    <p className="text-zinc-400 font-mono">{new Date().toLocaleDateString('en-IN', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+
+                {/* REPLACED EXPORT BUTTON WITH DATE */}
+                <div className="flex flex-col items-end justify-center">
+                    <span className="text-[11px] font-bold tracking-[0.15em] text-slate-500 uppercase mb-1">
+                                TODAY
+                    </span>
+                <span className="text-base font-mono text-slate-300 tracking-tight">
+                             {getTodayDateString()}
+                </span>
                 </div>
             </div>
 
-            {/* TOP STATS ROW */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+
+            {/* TOP STATS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                 <StatCard
                     icon={Landmark}
                     title="Net Worth"
-                    value={formatMoney(netWorth)}
-                    badge="Total Wealth"
-                    colorTheme={netWorth >= 0 ? 'emerald' : 'rose'}
-                    subtitle={<span className="text-zinc-500">Assets - Liabilities</span>}
+                    value={formatMoney(data.netWorth)}
+                    colorTheme={data.netWorth >= 0 ? "emerald" : "rose"}
+                    subtitle="Assets minus Liabilities"
                 />
-
                 <StatCard
                     icon={Activity}
                     title="Cash Flow"
-                    value={(isPositiveCashFlow ? '+' : '') + formatMoney(netAmount)}
-                    badge="Monthly Net"
-                    colorTheme={isPositiveCashFlow ? 'emerald' : 'rose'}
-                    subtitle={isPositiveCashFlow ? 'Surplus Income' : 'Deficit Spending'}
+                    value={formatMoney(data.cashFlow)}
+                    colorTheme={data.cashFlow >= 0 ? "emerald" : "rose"}
+                    subtitle="Current Month Net"
                 />
-
                 <StatCard
                     icon={PieChart}
                     title="Gross Assets"
-                    value={formatMoney(grossAssets)}
-                    badge="Total Holdings"
+                    value={formatMoney(data.grossAssets)}
                     colorTheme="blue"
-                    subtitle={<span className="text-zinc-500">Before Debt Deduction</span>}
+                    subtitle="Total Wealth Value"
+                />
+                <StatCard
+                    icon={ShieldCheck}
+                    title="Insurances"
+                    value={data.activeInsurances}
+                    colorTheme="violet"
+                    badge="Active"
+                    subtitle="Protection Coverage"
                 />
             </div>
 
-            {/* MAIN CONTENT GRID */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            {/* MAIN CONTENT */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 xl:gap-12">
 
-                {/* LEFT COLUMN: Activity & Liabilities (2/3 width) */}
-                <div className="xl:col-span-2 space-y-8">
+                {/* Left: Transactions & Debts */}
+                <div className="xl:col-span-2 space-y-12">
 
-                    {/* Recent Transactions */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between px-1">
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                <Receipt className="w-5 h-5 text-zinc-500" /> Recent Activity
-                            </h3>
-                            <button onClick={() => navigate('/transactions')} className="text-xs text-zinc-500 hover:text-white flex items-center gap-1 transition-colors">
-                                View All <ChevronRight className="w-3 h-3" />
+                    {/* RECENT ACTIVITY */}
+                    <section>
+                        <div className="flex justify-between items-end mb-6">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                                    <div className="p-1.5 bg-zinc-900 rounded-md"><Receipt className="text-zinc-400 w-4 h-4" /></div>
+                                    Recent Activity
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => navigate('/transactions')}
+                                className="group flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-white transition-colors"
+                            >
+                                View All <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                             </button>
                         </div>
-                        <div className={`${CARD_BASE} p-2 min-h-[250px]`}>
-                            {recentTransactions.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-48 text-zinc-600">
-                                    <Receipt className="w-10 h-10 mb-3 opacity-20" />
-                                    <p className="text-sm">No recent transactions</p>
+
+                        <div className={`${CARD_BASE} overflow-hidden`}>
+                            {data.recentTransactions.map(t => <TransactionRow key={t.id} transaction={t} />)}
+                            {data.recentTransactions.length === 0 && (
+                                <div className="p-12 text-center flex flex-col items-center justify-center text-zinc-500">
+                                    <Receipt className="w-8 h-8 mb-3 opacity-20" />
+                                    <p className="text-sm">No recent transactions found.</p>
                                 </div>
-                            ) : (
-                                recentTransactions.map(txn => (
-                                    <TransactionRow key={txn.id} transaction={txn} />
+                            )}
+                        </div>
+                    </section>
+
+                    {/* LIABILITIES */}
+                    <section>
+                        <div className="flex justify-between items-end mb-6">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                                    <div className="p-1.5 bg-zinc-900 rounded-md"><CreditCard className="text-zinc-400 w-4 h-4" /></div>
+                                    Liabilities
+                                </h3>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-0.5">Total Outstanding</span>
+                                <span className="text-rose-400 font-mono font-bold text-sm bg-rose-500/10 px-2 py-0.5 rounded text-right">
+                                    {formatMoney(data.debtTotal)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            {data.recentDebts.length > 0 ? (
+                                data.recentDebts.map(debt => (
+                                    <LiabilityCard key={debt.id} debt={debt} />
                                 ))
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Debt/Liabilities Section */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between px-1">
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                <CreditCard className="w-5 h-5 text-zinc-500" /> Liabilities & Debt
-                            </h3>
-                            <button onClick={() => navigate('/debts')} className="text-xs text-zinc-500 hover:text-white flex items-center gap-1 transition-colors">
-                                Manage Debts <ChevronRight className="w-3 h-3" />
-                            </button>
-                        </div>
-                        <div className={`${CARD_BASE} p-2`}>
-                            {debts.length === 0 ? (
-                                <div className="p-6 text-center">
-                                    <p className="text-xs text-zinc-500">Debt free! No liabilities recorded.</p>
-                                </div>
                             ) : (
-                                debts.map(debt => <FinanceItemRow key={debt.id} item={debt} type="debt" />)
+                                <div className={`${CARD_BASE} p-12 col-span-2 flex flex-col items-center justify-center border-dashed border-zinc-800`}>
+                                    <CreditCard className="w-8 h-8 mb-3 text-zinc-600 opacity-50" />
+                                    <p className="text-zinc-500 text-sm">No active debts found.</p>
+                                </div>
                             )}
                         </div>
-                    </div>
+                    </section>
                 </div>
 
-                {/* RIGHT COLUMN: Assets & Goals (1/3 width) */}
-                <div className="xl:col-span-1 space-y-8">
+                {/* Right: Goals & Assets */}
+                <div className="space-y-12">
 
-                    {/* Goals Widget */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between px-1">
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                <Trophy className="w-5 h-5 text-zinc-500" /> Goals
+                    {/* GOALS */}
+                    <section>
+                        <div className="flex justify-between items-end mb-6">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                                <div className="p-1.5 bg-zinc-900 rounded-md"><Trophy className="text-zinc-400 w-4 h-4" /></div>
+                                Financial Goals
                             </h3>
-                            <span className="text-xs text-zinc-500">{goalStats.completed} Completed</span>
+                            <span className="text-xs font-medium text-zinc-500 bg-zinc-900 px-2.5 py-1 rounded-full">
+                                {data.goalProgress.completed}/{data.goalProgress.total} Done
+                            </span>
                         </div>
-                        <div className="space-y-3">
-                            {goals.length === 0 ? (
-                                <div className={`${CARD_BASE} p-6 text-center border-dashed border-zinc-800`}>
-                                    <Target className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-                                    <p className="text-xs text-zinc-500">No active goals</p>
-                                </div>
-                            ) : (
-                                goals.map(goal => <GoalBar key={goal.id} goal={goal} />)
-                            )}
-                        </div>
-                    </div>
 
-                    {/* Assets Widget */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between px-1">
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                <PieChart className="w-5 h-5 text-zinc-500" /> Assets
-                            </h3>
-                            <button onClick={() => navigate('/assets')} className="text-xs text-zinc-500 hover:text-white flex items-center gap-1 transition-colors">
-                                View All <ChevronRight className="w-3 h-3" />
-                            </button>
+                        <div className="space-y-4">
+                            {data.recentGoals.map(goal => {
+                                const progress = Math.min(100, (safeNumber(goal.currentAmount) / safeNumber(goal.targetAmount)) * 100);
+                                return (
+                                    <div key={goal.id} className={`${CARD_BASE} p-5 group`}>
+                                        <div className="flex justify-between items-end mb-3">
+                                            <span className="text-sm font-medium text-zinc-300 group-hover:text-white transition-colors">{goal.name}</span>
+                                            <span className="text-emerald-400 font-mono text-sm font-bold">{Math.round(progress)}%</span>
+                                        </div>
+                                        <div className="w-full h-2 bg-zinc-900 rounded-full overflow-hidden shadow-inner">
+                                            <div
+                                                className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-1000 ease-out relative"
+                                                style={{ width: `${progress}%` }}
+                                            >
+                                                <div className="absolute top-0 right-0 bottom-0 left-0 bg-white/20 animate-pulse"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
+                    </section>
+
+                    {/* TOP ASSETS */}
+                    <section>
+                        <div className="flex justify-between items-end mb-6">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                                <div className="p-1.5 bg-zinc-900 rounded-md"><PieChart className="text-zinc-400 w-4 h-4" /></div>
+                                Top Assets
+                            </h3>
+                        </div>
+
                         <div className={`${CARD_BASE} p-2`}>
-                            {assets.length === 0 ? (
-                                <div className="p-6 text-center">
-                                    <p className="text-xs text-zinc-500">No assets recorded</p>
+                            {data.recentAssets.map(asset => (
+                                <div key={asset.id} className="flex justify-between items-center p-4 rounded-xl hover:bg-zinc-900/60 transition-colors group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-2 h-2 rounded-full bg-blue-500/50 group-hover:bg-blue-400 transition-colors" />
+                                        <span className="text-sm font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors">{asset.name}</span>
+                                    </div>
+                                    <span className="text-sm font-mono font-medium text-white">{formatMoney(asset.value || asset.currentValue)}</span>
                                 </div>
-                            ) : (
-                                assets.map(asset => <FinanceItemRow key={asset.id} item={asset} type="asset" />)
+                            ))}
+                            {data.recentAssets.length === 0 && (
+                                <p className="p-8 text-center text-sm text-zinc-500">No assets recorded.</p>
                             )}
                         </div>
-                    </div>
-
+                    </section>
                 </div>
             </div>
         </div>

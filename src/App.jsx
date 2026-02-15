@@ -34,27 +34,21 @@ const MainLayout = ({ children }) => {
     const location = useLocation();
 
     // List of routes where the Sidebar should NOT appear
-    const hideSidebarRoutes = ["/login", "/signup", "/register"];
+    const hideSidebarRoutes = ["/login", "/signup", "/register", "/fynix", "/chat"];
 
-    // Check if current path is in the hidden list
     const isFullScreen = hideSidebarRoutes.includes(location.pathname);
 
     return (
         <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-emerald-500/30">
-            {/* Conditionally Render Sidebar */}
             {!isFullScreen && <Sidebar />}
 
-            {/* Conditionally apply margin.
-                If Sidebar is present: lg:ml-64
-                If FullScreen (Login): ml-0
-            */}
-            <main className={`flex-1 min-h-screen transition-all duration-300 ${!isFullScreen ? 'lg:ml-64' : ''}`}>
+            {/* If isFullScreen is true, we remove the margin entirely (ml-0) */}
+            <main className={`flex-1 min-h-screen transition-all duration-300 ${!isFullScreen ? 'lg:ml-64' : 'ml-0'}`}>
                 {children}
             </main>
         </div>
     );
 };
-
 function App() {
     return (
         <BrowserRouter>

@@ -1,21 +1,9 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-    Target,
-    Trophy,
-    Calendar,
-    Plus,
-    Edit2,
-    Trash2,
-    X,
-    Search,
-    AlertCircle,
-    CheckCircle2,
-    Loader2,
-    TrendingUp,
-    Flag
+    Target, Trophy, Calendar, Plus, Edit2, Trash2, X, Search,
+    AlertCircle, CheckCircle2, Loader2, Flag, ChevronDown,TrendingUp, Wallet
 } from 'lucide-react';
 
-// Import API methods
 import {
     fetchGoals,
     createGoal,
@@ -24,20 +12,26 @@ import {
     fetchGoalStats
 } from '../../services/api.jsx';
 
-// ============================================================================
-// STYLES & UTILS
-// ============================================================================
-
+/* ===========================
+   STYLES & UTILS
+=========================== */
 const BORDER_STYLE = "border border-white/10";
 const CARD_BASE = `bg-black ${BORDER_STYLE} rounded-2xl transition-all duration-300`;
-const INPUT_BASE = "w-full bg-zinc-900/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/20 focus:bg-zinc-900/50 transition-all placeholder:text-zinc-600";
+const INPUT_BASE =
+    "w-full bg-zinc-900/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/20 focus:bg-zinc-900/50 transition-all placeholder:text-zinc-600";
 
-const currency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
+const currency = (val) =>
+    new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0
+    }).format(val || 0);
 
 const formatDate = (dateStr) => {
     if (!dateStr) return 'No Deadline';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(dateStr).toLocaleDateString('en-IN', {
+        month: 'short', day: 'numeric', year: 'numeric'
+    });
 };
 
 const calculateProgress = (current, target) => {
@@ -45,127 +39,173 @@ const calculateProgress = (current, target) => {
     return Math.min(Math.round((current / target) * 100), 100);
 };
 
-// ============================================================================
-// SUB-COMPONENTS
-// ============================================================================
-
+/* ===========================
+   SUB COMPONENTS
+=========================== */
 const Toast = ({ message, type, onClose }) => (
-    <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-6 py-4 rounded-xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5 z-50
-        ${type === 'error' ? 'bg-red-950/80 border-red-900/50 text-red-200' : 'bg-zinc-900/90 border-zinc-800 text-white'}`}>
-        {type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5 text-cyan-400" />}
+    <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-6 py-4 rounded-xl border shadow-2xl backdrop-blur-md z-50
+    ${type === 'error' ? 'bg-red-950/80 border-red-900/50 text-red-200' : 'bg-zinc-900/90 border-zinc-800 text-white'}`}>
+        {type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} className="text-cyan-400" />}
         <p className="font-medium text-sm">{message}</p>
-        <button onClick={onClose} className="ml-2 opacity-50 hover:opacity-100"><X className="w-4 h-4" /></button>
+        <button onClick={onClose} className="ml-2 opacity-50 hover:opacity-100"><X size={16} /></button>
     </div>
 );
 
 const StatCard = ({ label, value, icon: Icon, subtext }) => (
-    <div className={`${CARD_BASE} p-6 relative overflow-hidden group`}>
-        <div className="flex items-start justify-between mb-4">
-            <div className={`p-2.5 rounded-lg bg-zinc-900 text-cyan-400 group-hover:bg-cyan-900/20 transition-colors`}>
-                <Icon className="w-5 h-5" />
+    <div className={`${CARD_BASE} p-6 group`}>
+        <div className="mb-4">
+            <div className="p-2.5 rounded-lg bg-zinc-900 text-cyan-400 inline-block">
+                <Icon size={20} />
             </div>
         </div>
-        <div>
-            <p className="text-zinc-500 text-xs font-medium uppercase tracking-wide mb-1">{label}</p>
-            <p className="text-2xl font-bold tracking-tight text-white">{value}</p>
-            {subtext && <p className="text-xs text-zinc-600 mt-2">{subtext}</p>}
-        </div>
+        <p className="text-zinc-500 text-xs uppercase mb-1">{label}</p>
+        <p className="text-2xl font-bold">{value}</p>
+        {subtext && <p className="text-xs text-zinc-600 mt-2">{subtext}</p>}
     </div>
 );
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
+/* ===========================
+   MAIN COMPONENT
+=========================== */
 export default function Goals() {
-    // Data State
+    /* -------------------------
+       STATES
+    ------------------------- */
+    // Pagination Data
     const [goals, setGoals] = useState([]);
-    const [stats, setStats] = useState({ totalGoals: 0, completedGoals: 0, totalTargetValue: 0 });
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+
+    // Server-side Stats matching your backend JSON
+    const [stats, setStats] = useState({
+        totalGoals: 0,
+        completedGoals: 0,
+        totalTarget: 0,
+        totalCurrent: 0,
+        totalMonthlyRequired: 0
+    });
+
 
     // UI State
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [notification, setNotification] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Modal State
     const [modalOpen, setModalOpen] = useState(false);
     const [editingGoal, setEditingGoal] = useState(null);
-    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
     const [formLoading, setFormLoading] = useState(false);
 
-    // Form Data
-    const [formData, setFormData] = useState({
-        name: '',
-        targetAmount: '',
-        currentAmount: '',
-        deadline: '',
-        status: 'IN_PROGRESS'
-    });
+    /* -------------------------
+       FORM
+    ------------------------- */
+    const initialForm = { name: '', targetAmount: '', currentAmount: '', deadline: '', status: 'IN_PROGRESS' };
+    const [formData, setFormData] = useState(initialForm);
 
-    // --- Lifecycle ---
-
-    useEffect(() => { loadData(); }, []);
+    /* -------------------------
+       TOAST
+    ------------------------- */
+    const showToast = (msg, type = 'success') => setNotification({ message: msg, type });
 
     useEffect(() => {
-        if (notification) {
-            const timer = setTimeout(() => setNotification(null), 3000);
-            return () => clearTimeout(timer);
-        }
+        if (!notification) return;
+        const t = setTimeout(() => setNotification(null), 3000);
+        return () => clearTimeout(t);
     }, [notification]);
 
-    const showToast = (message, type = 'success') => setNotification({ message, type });
+    /* -------------------------
+       LOAD DATA
+    ------------------------- */
+    const fetchDashboardStats = async () => {
+        try {
+            const res = await fetchGoalStats();
+            const data = res.data || res;
+            setStats({
+                totalGoals: data.totalGoals || 0,
+                completedGoals: data.completedGoals || 0,
+                totalTarget: data.totalTarget || 0,
+                totalCurrent: data.totalCurrent || 0,
+                totalMonthlyRequired: data.totalMonthlyRequired || 0
+            });
+        } catch (err) {
+            console.error("Fetch stats error:", err);
+        }
+    };
 
-    const loadData = async () => {
+    const fetchPageData = async (pageNumber) => {
+        try {
+            const res = await fetchGoals(pageNumber, 12);
+            const data = res.data || res;
+
+            if (data && data.content) {
+                if (pageNumber === 0) {
+                    setGoals(data.content);
+                } else {
+                    setGoals(prev => [...prev, ...data.content]);
+                }
+                setPage(pageNumber);
+                setHasMore(!data.last);
+            } else {
+                setGoals(Array.isArray(data) ? data : []);
+                setHasMore(false);
+            }
+        } catch (err) {
+            console.error("Fetch page error:", err);
+        }
+    };
+
+    const loadInitialData = useCallback(async () => {
         setLoading(true);
         try {
-            const [listRes, statsRes] = await Promise.all([
-                fetchGoals(),
-                fetchGoalStats()
+            await Promise.all([
+                fetchDashboardStats(),
+                fetchPageData(0)
             ]);
-            setGoals(listRes.data || []);
-            setStats(statsRes.data || { totalGoals: 0, completedGoals: 0, totalTargetValue: 0 });
         } catch (err) {
-            console.error("Error loading goals:", err);
             showToast("Could not connect to server", "error");
         } finally {
             setLoading(false);
         }
+    }, []);
+
+    // Empty array ensures this runs exactly once on mount
+    useEffect(() => {
+        loadInitialData();
+    }, [loadInitialData]);
+
+    const handleLoadMore = async () => {
+        if (loadingMore || !hasMore) return;
+        setLoadingMore(true);
+        await fetchPageData(page + 1);
+        setLoadingMore(false);
     };
 
-    // --- Computed ---
-
+    /* -------------------------
+       COMPUTED (Client-side Search)
+    ------------------------- */
     const filteredGoals = useMemo(() => {
-        return goals.filter(g =>
-            g.name?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        return goals.filter(g => g.name?.toLowerCase().includes(searchQuery.toLowerCase()));
     }, [goals, searchQuery]);
 
-    // --- Handlers ---
-
+    /* -------------------------
+       HANDLERS
+    ------------------------- */
     const openModal = (goal = null) => {
         setEditingGoal(goal);
         if (goal) {
             setFormData({
-                name: goal.name,
-                targetAmount: goal.targetAmount,
-                currentAmount: goal.currentAmount || 0,
-                deadline: goal.deadline ? new Date(goal.deadline).toISOString().split('T')[0] : '',
-                status: goal.status
+                name: goal.name, targetAmount: goal.targetAmount, currentAmount: goal.currentAmount || 0,
+                deadline: goal.deadline ? new Date(goal.deadline).toISOString().split('T')[0] : '', status: goal.status
             });
         } else {
-            setFormData({
-                name: '',
-                targetAmount: '',
-                currentAmount: '',
-                deadline: '',
-                status: 'IN_PROGRESS'
-            });
+            setFormData(initialForm);
         }
         setModalOpen(true);
     };
 
-    const handleInputChange = (e) => {
+    const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -174,12 +214,7 @@ export default function Goals() {
         e.preventDefault();
         setFormLoading(true);
         try {
-            const payload = {
-                ...formData,
-                targetAmount: parseFloat(formData.targetAmount),
-                currentAmount: parseFloat(formData.currentAmount || 0)
-            };
-
+            const payload = { ...formData, targetAmount: parseFloat(formData.targetAmount), currentAmount: parseFloat(formData.currentAmount || 0) };
             if (editingGoal) {
                 await updateGoal(editingGoal.id, payload);
                 showToast("Goal updated");
@@ -187,10 +222,9 @@ export default function Goals() {
                 await createGoal(payload);
                 showToast("Goal created");
             }
-            await loadData();
+            await loadInitialData(); // Reloads stats and jumps back to page 0
             setModalOpen(false);
         } catch (err) {
-            console.error(err);
             showToast("Operation failed", "error");
         } finally {
             setFormLoading(false);
@@ -201,225 +235,185 @@ export default function Goals() {
         if (!deletingId) return;
         try {
             await deleteGoal(deletingId);
-            setGoals(prev => prev.filter(g => g.id !== deletingId));
             showToast("Goal deleted");
-            // Reload stats to keep sync
-            const statsRes = await fetchGoalStats();
-            setStats(statsRes.data);
+            await loadInitialData(); // Reloads stats and jumps back to page 0
         } catch (err) {
-            console.error(err);
-            showToast("Failed to delete", "error");
-            await loadData();
+            showToast("Delete failed", "error");
+        } finally {
+            setDeleteOpen(false);
+            setDeletingId(null);
         }
-        setDeleteConfirmOpen(false);
     };
 
-    // --- Render ---
-
-    if (loading && goals.length === 0) return (
-        <div className="min-h-screen bg-black flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-zinc-600 animate-spin" />
-        </div>
-    );
+    /* ===========================
+       RENDER
+    ============================ */
+    if (loading && goals.length === 0) {
+        return (
+            <div className="min-h-screen bg-black flex justify-center items-center">
+                <Loader2 className="animate-spin text-cyan-500 w-8 h-8" />
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-black text-zinc-100 p-6 md:p-10 font-sans">
+        <div className="min-h-screen bg-black text-zinc-100 p-6 md:p-10">
             {notification && <Toast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
 
-            {/* Header */}
+            {/* HEADER */}
             <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                    <h2 className="text-4xl font-bold text-white tracking-tight mb-2">Financial Goals</h2>
+                    <h2 className="text-4xl font-bold mb-2">Financial Goals</h2>
                     <p className="text-zinc-500 text-lg">Dream big, plan smart</p>
                 </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => openModal()}
-                        className="group flex items-center gap-2 bg-white text-black px-5 py-2.5 rounded-full font-medium hover:bg-zinc-200 transition-all active:scale-95"
-                    >
-                        <Plus className="w-4 h-4 transition-transform group-hover:rotate-90" />
-                        <span>New Goal</span>
-                    </button>
-                </div>
+                <button onClick={() => openModal()} className="flex items-center justify-center gap-2 bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-zinc-200 transition-colors">
+                    <Plus size={18} /> New Goal
+                </button>
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+            {/* STATS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 <StatCard
-                    label="Goals Achieved"
+                    label="Goals Progress"
                     value={`${stats.completedGoals} / ${stats.totalGoals}`}
                     icon={Trophy}
-                    subtext="Keep pushing your limits"
+                    subtext="Goals completely funded"
                 />
                 <StatCard
-                    label="Total Target Volume"
-                    value={currency(stats.totalTargetValue)}
+                    label="Total Saved"
+                    value={currency(stats.totalCurrent)}
+                    icon={Wallet}
+                    subtext="Currently stashed away"
+                />
+                <StatCard
+                    label="Total Target"
+                    value={currency(stats.totalTarget)}
                     icon={Target}
-                    subtext="Total value of all active goals"
+                    subtext="Cumulative goal value"
+                />
+                <StatCard
+                    label="Monthly Required"
+                    value={currency(stats.totalMonthlyRequired)}
+                    icon={TrendingUp}
+                    subtext="To stay on track for deadlines"
                 />
             </div>
-
-            {/* Controls */}
+            {/* SEARCH */}
             <div className="mb-8 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                    type="text"
-                    placeholder="Search goals..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className={`${INPUT_BASE} pl-10 bg-black`}
-                />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search loaded goals..." className={`${INPUT_BASE} pl-11 bg-black`} />
             </div>
 
-            {/* Goals Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* GRID */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredGoals.length === 0 ? (
                     <div className="col-span-full py-20 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/20">
-                        <Flag className="w-16 h-16 mx-auto mb-4 text-zinc-700" />
+                        <Flag size={64} className="mx-auto mb-4 text-zinc-700" />
                         <h3 className="text-xl font-bold text-zinc-300">No goals set</h3>
                         <p className="text-zinc-500 mt-2 mb-6">Create a savings goal to start tracking.</p>
-                        <button onClick={() => openModal()} className="text-white hover:text-zinc-300 font-medium underline underline-offset-4">Set a goal</button>
+                        <button onClick={() => openModal()} className="underline hover:text-white transition-colors">Set a goal</button>
                     </div>
-                ) : (
-                    filteredGoals.map((goal) => {
-                        const progress = calculateProgress(goal.currentAmount, goal.targetAmount);
-                        const isCompleted = progress >= 100;
+                ) : filteredGoals.map(goal => {
+                    const progress = calculateProgress(goal.currentAmount, goal.targetAmount);
+                    const done = progress >= 100;
 
-                        return (
-                            <div key={goal.id} className={`${CARD_BASE} p-6 group relative hover:border-zinc-700`}>
-                                {/* Header */}
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center border border-zinc-800 bg-zinc-900 ${isCompleted ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                                            {isCompleted ? <Trophy className="w-5 h-5" /> : <Target className="w-5 h-5" />}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-white text-lg">{goal.name}</h3>
-                                            <p className={`text-xs uppercase tracking-wider font-bold ${isCompleted ? 'text-emerald-500' : 'text-zinc-500'}`}>
-                                                {isCompleted ? 'Completed' : 'In Progress'}
-                                            </p>
-                                        </div>
+                    return (
+                        <div key={goal.id} className={`${CARD_BASE} p-6 group hover:border-zinc-700`}>
+                            <div className="flex justify-between mb-6">
+                                <div className="flex gap-4">
+                                    <div className={`w-10 h-10 rounded-full flex justify-center items-center border border-zinc-800 bg-zinc-900 ${done ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                                        {done ? <Trophy size={20} /> : <Target size={20} />}
                                     </div>
-                                    {isCompleted && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
-                                </div>
-
-                                {/* Progress Section */}
-                                <div className="mb-6">
-                                    <div className="flex justify-between text-sm mb-2">
-                                        <span className="text-zinc-400">Saved</span>
-                                        <span className="text-white font-bold">{progress}%</span>
-                                    </div>
-                                    <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full transition-all duration-1000 ease-out ${isCompleted ? 'bg-emerald-500' : 'bg-cyan-500'}`}
-                                            style={{ width: `${progress}%` }}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Amount Details */}
-                                <div className="flex justify-between items-end mb-6">
                                     <div>
-                                        <p className="text-xs text-zinc-500 uppercase">Current</p>
-                                        <p className="text-xl font-bold text-white">{currency(goal.currentAmount)}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-zinc-500 uppercase">Target</p>
-                                        <p className="text-lg font-medium text-zinc-400">{currency(goal.targetAmount)}</p>
+                                        <h3 className="font-bold text-lg">{goal.name}</h3>
+                                        <p className={`text-xs uppercase font-bold ${done ? 'text-emerald-500' : 'text-zinc-500'}`}>
+                                            {done ? 'Completed' : 'In Progress'}
+                                        </p>
                                     </div>
                                 </div>
+                                {done && <CheckCircle2 size={20} className="text-emerald-500" />}
+                            </div>
 
-                                {/* Footer Info & Actions */}
-                                <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                                    <div className="flex items-center gap-2 text-xs text-zinc-500">
-                                        <Calendar className="w-3 h-3" />
-                                        <span>Target: {formatDate(goal.deadline)}</span>
-                                    </div>
-
-                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openModal(goal)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-white transition-colors">
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => { setDeletingId(goal.id); setDeleteConfirmOpen(true); }} className="p-2 hover:bg-red-900/20 rounded-lg text-zinc-500 hover:text-red-400 transition-colors">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                            <div className="mb-6">
+                                <div className="flex justify-between mb-2 text-sm">
+                                    <span className="text-zinc-400">Saved</span>
+                                    <span className="font-bold">{progress}%</span>
+                                </div>
+                                <div className="h-2 bg-zinc-800 rounded overflow-hidden">
+                                    <div className={`h-full rounded transition-all duration-500 ${done ? 'bg-emerald-500' : 'bg-cyan-500'}`} style={{ width: `${progress}%` }} />
                                 </div>
                             </div>
-                        );
-                    })
-                )}
+
+                            <div className="flex justify-between mb-6">
+                                <div>
+                                    <p className="text-xs text-zinc-500">Current</p>
+                                    <p className="text-xl font-bold">{currency(goal.currentAmount)}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-zinc-500">Target</p>
+                                    <p className="text-lg text-zinc-400">{currency(goal.targetAmount)}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between pt-4 border-t border-white/5">
+                                <div className="flex gap-2 text-xs text-zinc-500 items-center">
+                                    <Calendar size={12} />
+                                    Target: {formatDate(goal.deadline)}
+                                </div>
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => openModal(goal)} className="p-2 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors"><Edit2 size={16} /></button>
+                                    <button onClick={() => { setDeletingId(goal.id); setDeleteOpen(true); }} className="p-2 hover:bg-red-900/20 rounded text-zinc-400 hover:text-red-400 transition-colors"><Trash2 size={16} /></button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
+            {/* LOAD MORE BUTTON */}
+            {hasMore && !searchQuery && (
+                <div className="mt-10 flex justify-center pb-8">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-zinc-800 text-white rounded-full font-medium hover:bg-zinc-800 hover:border-zinc-700 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                        <span>{loadingMore ? 'Loading...' : 'Load More Goals'}</span>
+                    </button>
+                </div>
+            )}
+
             {/* ================= MODALS ================= */}
-
-            {/* Add/Edit Modal */}
+            {/* ADD / EDIT */}
             {modalOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-md w-full shadow-2xl p-6 relative overflow-hidden">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-white">
-                                {editingGoal ? 'Edit Goal' : 'New Goal'}
-                            </h3>
-                            <button onClick={() => setModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors"><X className="w-5 h-5"/></button>
+                            <h3 className="text-xl font-bold text-white">{editingGoal ? 'Edit Goal' : 'New Goal'}</h3>
+                            <button onClick={() => setModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors"><X size={20} /></button>
                         </div>
-
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Goal Name</label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    required
-                                    placeholder="e.g. New Car"
-                                    value={formData.name}
-                                    onChange={handleInputChange}
-                                    className={INPUT_BASE}
-                                />
+                                <input name="name" required placeholder="e.g. Emergency Fund" value={formData.name} onChange={handleChange} className={INPUT_BASE} />
                             </div>
-
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Target Amount</label>
-                                    <input
-                                        type="number"
-                                        name="targetAmount"
-                                        required
-                                        placeholder="0.00"
-                                        value={formData.targetAmount}
-                                        onChange={handleInputChange}
-                                        className={`${INPUT_BASE} font-mono`}
-                                    />
+                                    <input name="targetAmount" type="number" required placeholder="0.00" value={formData.targetAmount} onChange={handleChange} className={`${INPUT_BASE} font-mono`} />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Saved So Far</label>
-                                    <input
-                                        type="number"
-                                        name="currentAmount"
-                                        placeholder="0.00"
-                                        value={formData.currentAmount}
-                                        onChange={handleInputChange}
-                                        className={`${INPUT_BASE} font-mono`}
-                                    />
+                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Currently Saved</label>
+                                    <input name="currentAmount" type="number" placeholder="0.00" value={formData.currentAmount} onChange={handleChange} className={`${INPUT_BASE} font-mono`} />
                                 </div>
                             </div>
-
                             <div>
                                 <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Target Date</label>
-                                <input
-                                    type="date"
-                                    name="deadline"
-                                    value={formData.deadline}
-                                    onChange={handleInputChange}
-                                    className={`${INPUT_BASE} scheme-dark`}
-                                />
+                                <input name="deadline" type="date" value={formData.deadline} onChange={handleChange} className={`${INPUT_BASE} scheme-dark`} />
                             </div>
-
-                            <button
-                                type="submit"
-                                disabled={formLoading}
-                                className="w-full mt-4 bg-white text-black font-bold py-3.5 rounded-xl hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-70"
-                            >
+                            <button disabled={formLoading} className="w-full bg-white text-black py-3.5 mt-2 rounded-xl font-bold hover:bg-zinc-200 transition-colors disabled:opacity-70 flex justify-center items-center gap-2">
+                                {formLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {formLoading ? 'Saving...' : 'Save Goal'}
                             </button>
                         </form>
@@ -427,28 +421,18 @@ export default function Goals() {
                 </div>
             )}
 
-            {/* Delete Modal */}
-            {deleteConfirmOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-sm w-full p-6 text-center">
-                        <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
-                            <Trash2 className="w-6 h-6" />
+            {/* DELETE */}
+            {deleteOpen && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-center max-w-sm w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                            <Trash2 size={28} />
                         </div>
                         <h3 className="text-lg font-bold text-white mb-2">Delete Goal?</h3>
-                        <p className="text-zinc-500 text-sm mb-6">This will remove the goal and its progress tracking.</p>
+                        <p className="text-zinc-500 text-sm mb-6">This will permanently remove this goal from your dashboard.</p>
                         <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => setDeleteConfirmOpen(false)}
-                                className="py-2.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                className="py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors"
-                            >
-                                Delete
-                            </button>
+                            <button onClick={() => setDeleteOpen(false)} className="py-2.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors">Cancel</button>
+                            <button onClick={handleDelete} className="py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors">Delete</button>
                         </div>
                     </div>
                 </div>

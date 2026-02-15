@@ -1,55 +1,39 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    CreditCard,
-    Calendar,
-    Plus,
-    Edit2,
-    Trash2,
-    X,
-    Search,
-    AlertCircle,
-    CheckCircle2,
-    Loader2,
-    Zap,
-    Power
+    CreditCard, Calendar, Plus, Edit2, Trash2, X, Search,
+    AlertCircle, CheckCircle2, Loader2, Zap, Power, ChevronDown
 } from 'lucide-react';
 
-// Import the methods from your api.js
-// Note: Ensure updateSubscription is added to your API file if you want the Edit feature to work
+// Import your API methods
 import {
     fetchSubscriptions,
+    fetchSubscriptionStats,
     createSubscription,
-    // updateSubscription, // Add this to your api.js: (id, data) => api.put(`/subscriptions/${id}`, data)
     deleteSubscription,
     toggleSubscription,
 } from '../../services/api.jsx';
 
-// You might need to add this manually to your api.js if it's missing
-// Temporary mock for update to prevent crash if you haven't added it yet
+// Temporary mock for update if you haven't added it yet
 const updateSubscription = async (id, data) => { console.warn("Add updateSubscription to api.js"); };
 
 // ============================================================================
 // STYLING CONSTANTS & UTILS
 // ============================================================================
-
 const BORDER_STYLE = "border border-white/10";
 const CARD_BASE = `bg-black ${BORDER_STYLE} rounded-2xl transition-all duration-300`;
 const INPUT_BASE = "w-full bg-zinc-900/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/20 focus:bg-zinc-900/50 transition-all placeholder:text-zinc-600";
 
 const currency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
-
 const formatDate = (dateStr) => {
     if (!dateStr) return 'No Date';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    return new Date(dateStr).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
 };
 
 // ============================================================================
 // SUB-COMPONENTS
 // ============================================================================
-
 const Toast = ({ message, type, onClose }) => (
-    <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-6 py-4 rounded-xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5 z-50
+    <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-6 py-4 rounded-xl border shadow-2xl backdrop-blur-md z-50
         ${type === 'error' ? 'bg-red-950/80 border-red-900/50 text-red-200' : 'bg-zinc-900/90 border-zinc-800 text-white'}`}>
         {type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
         <p className="font-medium text-sm">{message}</p>
@@ -75,13 +59,25 @@ const StatCard = ({ label, value, subtext }) => (
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
-
 export default function Subscriptions() {
-    // Data State
+    // Data & Pagination State
     const [subs, setSubs] = useState([]);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+
+    // Server-side Stats State (Populated from /stat endpoint)
+    // Server-side Stats State (Populated from /stat endpoint)
+    const [stats, setStats] = useState({
+        daily: 0,
+        weekly: 0,
+        monthly: 0,
+        quarterly: 0,
+        yearly: 0
+    });
 
     // UI State
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [notification, setNotification] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -94,16 +90,15 @@ export default function Subscriptions() {
 
     // Form Data
     const [formData, setFormData] = useState({
-        title: '',
-        amount: '',
-        billingCycle: 'monthly',
-        nextPaymentDate: '',
-        category: ''
+        title: '', amount: '', billingCycle: 'monthly', nextPaymentDate: '', category: ''
     });
 
     // --- Lifecycle ---
 
-    useEffect(() => { loadData(); }, []);
+    // The empty array [] ensures this runs EXACTLY ONCE on mount, preventing the infinite loop
+    useEffect(() => {
+        loadInitialData();
+    }, []);
 
     useEffect(() => {
         if (notification) {
@@ -114,45 +109,69 @@ export default function Subscriptions() {
 
     const showToast = (message, type = 'success') => setNotification({ message, type });
 
-    const loadData = async () => {
+    // --- Data Fetching ---
+
+    const fetchDashboardStats = async () => {
+        try {
+            const res = await fetchSubscriptionStats();
+            const data = res.data || res;
+
+            // Map the new Spring Boot DTO properties to local state
+            setStats({
+                daily: data.daily || 0,
+                weekly: data.weekly || 0,
+                monthly: data.monthly || 0,
+                quarterly: data.quarterly || 0,
+                yearly: data.yearly || 0
+            });
+        } catch (err) {
+            console.error("Failed to load stats", err);
+        }
+    };
+    const loadInitialData = async () => {
         setLoading(true);
         try {
-            // Fetch list - api.get('/subscriptions')
-            const response = await fetchSubscriptions();
-            // Handle both structure possibilities: response.data or response directly
-            const data = response.data || response;
-            setSubs(Array.isArray(data) ? data : []);
+            // Fetch stats and page 0 simultaneously
+            await Promise.all([
+                fetchDashboardStats(),
+                fetchPageData(0)
+            ]);
         } catch (err) {
-            console.error("Error loading data:", err);
             showToast("Could not connect to server", "error");
-            setSubs([]);
         } finally {
             setLoading(false);
         }
     };
 
-    // --- Computed ---
+    const fetchPageData = async (pageNumber) => {
+        const response = await fetchSubscriptions(null, pageNumber, 12);
+        const data = response.data || response;
 
-    // 1. Calculate Total Cost locally since no API endpoint was provided for it
-    const totalMonthlyCost = useMemo(() => {
-        return subs
-            .filter(s => s.active) // Only count active subs
-            .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-    }, [subs]);
+        if (data && data.content) {
+            if (pageNumber === 0) {
+                setSubs(data.content); // Reset list on page 0
+            } else {
+                setSubs(prev => [...prev, ...data.content]); // Append on Load More
+            }
+            setPage(pageNumber);
+            setHasMore(!data.last); // Spring Boot tells us if this is the last page
+        } else {
+            setSubs(Array.isArray(data) ? data : []);
+            setHasMore(false);
+        }
+    };
 
-    // 2. Count Active Services
-    const activeCount = useMemo(() => {
-        return subs.filter(s => s.active).length;
-    }, [subs]);
-
-    // 3. Search Filter
-    const filteredSubs = useMemo(() => {
-        return subs.filter(s =>
-            s.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            s.category?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [subs, searchQuery]);
-
+    const handleLoadMore = async () => {
+        if (loadingMore || !hasMore) return;
+        setLoadingMore(true);
+        try {
+            await fetchPageData(page + 1);
+        } catch (err) {
+            showToast("Failed to load more data", "error");
+        } finally {
+            setLoadingMore(false);
+        }
+    };
 
     // --- Handlers ---
 
@@ -160,20 +179,14 @@ export default function Subscriptions() {
         setEditingSub(sub);
         if (sub) {
             setFormData({
-                title: sub.title,
-                amount: sub.amount,
-                billingCycle: sub.billingCycle,
-                // Ensure date format matches input type="date" (YYYY-MM-DD)
+                title: sub.title, amount: sub.amount, billingCycle: sub.billingCycle,
                 nextPaymentDate: sub.nextPaymentDate ? new Date(sub.nextPaymentDate).toISOString().split('T')[0] : '',
                 category: sub.category
             });
         } else {
             setFormData({
-                title: '',
-                amount: '',
-                billingCycle: 'monthly',
-                nextPaymentDate: new Date().toISOString().split('T')[0],
-                category: ''
+                title: '', amount: '', billingCycle: 'monthly',
+                nextPaymentDate: new Date().toISOString().split('T')[0], category: ''
             });
         }
         setModalOpen(true);
@@ -189,17 +202,16 @@ export default function Subscriptions() {
         setFormLoading(true);
         try {
             if (editingSub) {
-                // Assuming you add updateSubscription to api.js
                 await updateSubscription(editingSub.id, formData);
                 showToast("Subscription updated");
             } else {
                 await createSubscription(formData);
                 showToast("Subscription added");
             }
-            await loadData();
+            // Reload everything to sync with backend pagination
+            await loadInitialData();
             setModalOpen(false);
         } catch (err) {
-            console.error(err);
             showToast("Operation failed", "error");
         } finally {
             setFormLoading(false);
@@ -208,16 +220,14 @@ export default function Subscriptions() {
 
     const handleToggle = async (e, id) => {
         e.stopPropagation();
-        // Optimistic UI Update
         const previousSubs = [...subs];
+        // Optimistic UI update for the grid
         setSubs(prev => prev.map(s => s.id === id ? { ...s, active: !s.active } : s));
 
         try {
             await toggleSubscription(id);
-            // No need to reload data if optimistic update worked,
-            // but usually safe to reload in bg to ensure sync
+            await fetchDashboardStats(); // Refresh stats from backend to update Totals
         } catch (err) {
-            console.error(err);
             setSubs(previousSubs); // Revert on failure
             showToast("Failed to toggle status", "error");
         }
@@ -227,15 +237,19 @@ export default function Subscriptions() {
         if (!deletingId) return;
         try {
             await deleteSubscription(deletingId);
-            setSubs(prev => prev.filter(s => s.id !== deletingId)); // Optimistic delete
             showToast("Subscription removed");
+            await loadInitialData(); // Refresh list and stats entirely
         } catch (err) {
-            console.error(err);
             showToast("Failed to delete", "error");
-            await loadData(); // Revert/Reload
         }
         setDeleteConfirmOpen(false);
     };
+
+    // Frontend Search Filter (Only filters currently loaded pages)
+    const filteredSubs = subs.filter(s =>
+        s.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.category?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     // --- Render ---
 
@@ -266,17 +280,17 @@ export default function Subscriptions() {
                 </div>
             </div>
 
-            {/* Stats Overview */}
+            {/* Stats Overview - Powered by the new Backend DTO */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
                 <StatCard
                     label="Total Monthly Cost"
-                    value={currency(totalMonthlyCost)}
-                    subtext="Calculated from active subscriptions"
+                    value={currency(stats.monthly)}
+                    subtext={`≈ ${currency(stats.daily)} per day`}
                 />
                 <StatCard
-                    label="Active Services"
-                    value={activeCount}
-                    subtext={`${subs.length - activeCount} currently paused`}
+                    label="Total Yearly Projection"
+                    value={currency(stats.yearly)}
+                    subtext={`≈ ${currency(stats.weekly)} per week`}
                 />
             </div>
 
@@ -285,7 +299,7 @@ export default function Subscriptions() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <input
                     type="text"
-                    placeholder="Search services..."
+                    placeholder="Search loaded services..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className={`${INPUT_BASE} pl-10 bg-black`}
@@ -306,8 +320,6 @@ export default function Subscriptions() {
                         const isActive = sub.active;
                         return (
                             <div key={sub.id} className={`${CARD_BASE} p-6 group relative hover:border-zinc-700 ${!isActive ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-
-                                {/* Header Row */}
                                 <div className="flex justify-between items-start mb-6">
                                     <div className="flex items-center gap-4">
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center border border-zinc-800 bg-zinc-900 text-zinc-400`}>
@@ -327,7 +339,6 @@ export default function Subscriptions() {
                                     </button>
                                 </div>
 
-                                {/* Cost Block */}
                                 <div className="mb-6">
                                     <div className="flex items-baseline gap-1">
                                         <span className={`text-3xl font-bold tracking-tight ${isActive ? 'text-white' : 'text-zinc-500'}`}>
@@ -337,7 +348,6 @@ export default function Subscriptions() {
                                     </div>
                                 </div>
 
-                                {/* Footer Info & Actions */}
                                 <div className="flex justify-between items-center pt-4 border-t border-white/5">
                                     <div className="flex items-center gap-2 text-xs text-zinc-500">
                                         <Calendar className="w-3 h-3" />
@@ -359,6 +369,20 @@ export default function Subscriptions() {
                 )}
             </div>
 
+            {/* Load More Button */}
+            {hasMore && !searchQuery && (
+                <div className="mt-10 flex justify-center">
+                    <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-zinc-800 text-white rounded-full font-medium hover:bg-zinc-800 hover:border-zinc-700 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                        <span>{loadingMore ? 'Loading...' : 'Load More Services'}</span>
+                    </button>
+                </div>
+            )}
+
             {/* ================= MODALS ================= */}
 
             {/* Add/Edit Modal */}
@@ -375,38 +399,17 @@ export default function Subscriptions() {
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Service Name</label>
-                                <input
-                                    type="text"
-                                    name="title"
-                                    required
-                                    placeholder="e.g. Netflix"
-                                    value={formData.title}
-                                    onChange={handleInputChange}
-                                    className={INPUT_BASE}
-                                />
+                                <input type="text" name="title" required placeholder="e.g. Netflix" value={formData.title} onChange={handleInputChange} className={INPUT_BASE} />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Amount</label>
-                                    <input
-                                        type="number"
-                                        name="amount"
-                                        required
-                                        placeholder="0.00"
-                                        value={formData.amount}
-                                        onChange={handleInputChange}
-                                        className={`${INPUT_BASE} font-mono`}
-                                    />
+                                    <input type="number" name="amount" required placeholder="0.00" value={formData.amount} onChange={handleInputChange} className={`${INPUT_BASE} font-mono`} />
                                 </div>
                                 <div>
                                     <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Cycle</label>
-                                    <select
-                                        name="billingCycle"
-                                        value={formData.billingCycle}
-                                        onChange={handleInputChange}
-                                        className={`${INPUT_BASE} appearance-none`}
-                                    >
+                                    <select name="billingCycle" value={formData.billingCycle} onChange={handleInputChange} className={`${INPUT_BASE} appearance-none`}>
                                         <option value="monthly">Monthly</option>
                                         <option value="yearly">Yearly</option>
                                         <option value="weekly">Weekly</option>
@@ -417,32 +420,15 @@ export default function Subscriptions() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Category</label>
-                                    <input
-                                        type="text"
-                                        name="category"
-                                        placeholder="e.g. Software"
-                                        value={formData.category}
-                                        onChange={handleInputChange}
-                                        className={INPUT_BASE}
-                                    />
+                                    <input type="text" name="category" placeholder="e.g. Software" value={formData.category} onChange={handleInputChange} className={INPUT_BASE} />
                                 </div>
                                 <div>
                                     <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Next Payment</label>
-                                    <input
-                                        type="date"
-                                        name="nextPaymentDate"
-                                        value={formData.nextPaymentDate}
-                                        onChange={handleInputChange}
-                                        className={`${INPUT_BASE} scheme-dark`}
-                                    />
+                                    <input type="date" name="nextPaymentDate" value={formData.nextPaymentDate} onChange={handleInputChange} className={`${INPUT_BASE} scheme-dark`} />
                                 </div>
                             </div>
 
-                            <button
-                                type="submit"
-                                disabled={formLoading}
-                                className="w-full mt-4 bg-white text-black font-bold py-3.5 rounded-xl hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-70"
-                            >
+                            <button type="submit" disabled={formLoading} className="w-full mt-4 bg-white text-black font-bold py-3.5 rounded-xl hover:bg-zinc-200 transition-all active:scale-[0.98] disabled:opacity-70">
                                 {formLoading ? 'Saving...' : 'Save Subscription'}
                             </button>
                         </form>
@@ -460,18 +446,8 @@ export default function Subscriptions() {
                         <h3 className="text-lg font-bold text-white mb-2">Remove Subscription?</h3>
                         <p className="text-zinc-500 text-sm mb-6">This will remove this service from your tracking calculations.</p>
                         <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => setDeleteConfirmOpen(false)}
-                                className="py-2.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                className="py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors"
-                            >
-                                Delete
-                            </button>
+                            <button onClick={() => setDeleteConfirmOpen(false)} className="py-2.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors">Cancel</button>
+                            <button onClick={handleDelete} className="py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors">Delete</button>
                         </div>
                     </div>
                 </div>

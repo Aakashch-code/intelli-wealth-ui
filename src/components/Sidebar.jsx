@@ -25,9 +25,10 @@ const MENU_GROUPS = [
     {
         title: "Wealth",
         items: [
-            { to: "/net-worth", icon: ScaleIcon, label: "Net Worth" },
             { to: "/assets", icon: ReceiptPercentIcon, label: "Assets" },
             { to: "/debts", icon: BanknotesIcon, label: "Debt Manager" },
+            { to: "/net-worth", icon: ScaleIcon, label: "Net Worth" },
+
         ]
     },
     {
@@ -38,25 +39,9 @@ const MENU_GROUPS = [
         ]
     },
     {
-        title: "Investments",
-        items: [
-            { to: "/portfolio", icon: ChartBarIcon, label: "Portfolio" },
-            { to: "/stocks", icon: BuildingLibraryIcon, label: "Stocks & ETFs" },
-            { to: "/crypto", icon: GlobeAltIcon, label: "Cryptocurrency" },
-            { to: "/investments", icon: ArrowTrendingUpIcon, label: "General Invest" },
-            { to: "/retirement", icon: ClockIcon, label: "Retirement" },
-        ]
-    },
-    {
         title: "Tools & Insights",
         items: [
-            { to: "/reports" , icon: ToolCase,label: "Reports"},
-            { to: "/tax-planning", icon: CalculatorIcon, label: "Tax Planning" },
-            { to: "/cash-flow", icon: ArrowTrendingUpIcon, label: "Cash Flow" },
-            { to: "/expense-analyzer", icon: ChartBarIcon, label: "Analyzer" },
-            { to: "/smart-recommendations", icon: SparklesIcon, label: "Smart Recs" },
-            { to: "/shopping-insights", icon: ShoppingBagIcon, label: "Shopping" },
-            { to: "/family-accounts", icon: UserGroupIcon, label: "Family" },
+            { to: "/reports" , icon: ToolCase,label: "Reports"}
         ]
     }
 ];
@@ -142,7 +127,16 @@ export default function Sidebar() {
                 {/* Special AI Button */}
                 <div className="mb-6">
                     <p className="text-xs font-bold text-zinc-600 uppercase tracking-wider mb-3 px-2">Assistant</p>
-                    <NavItem item={AI_ITEM} isSpecial={true} />
+                    <a
+                        href="/fynix"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={closeMobile}
+                        className="group flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200 mb-1 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 text-indigo-300 hover:text-white"
+                    >
+                        <ChatBubbleLeftRightIcon className="w-5 h-5 text-indigo-400" />
+                        <span className="text-sm font-medium">Ask Fynix AI</span>
+                    </a>
                 </div>
 
                 {/* Menu Groups */}
