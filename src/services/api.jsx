@@ -1,4 +1,3 @@
-// src/services/api.js
 import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -10,9 +9,8 @@ const api = axios.create({
 });
 
 /* =================================================================
-   INTERCEPTOR (The "Auth" Magic)
+   INTERCEPTOR
    ================================================================= */
-// This runs before EVERY request. It grabs the token and attaches it.
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -38,31 +36,47 @@ export const loginUser = (loginData) =>
    ================================================================= */
 
 /* --- Budgets --- */
-// In your api.jsx
+// Get paginated budgets
 export const fetchBudgets = (page = 0, size = 12) => {
-    return api.get('/budget', { params: { page, size } });
+    return api.get('/budget', {
+        params: { page, size }
+    });
 };
 
-// Add this so we get accurate totals across ALL pages
-export const fetchBudgetStats = () => {
+// Get overall budget summary (total allocated, total spent)
+export const fetchBudgetSummary = () => {
     return api.get('/budget/summary');
 };
-export const fetchBudgetById = (id) =>
-    api.get(`/budget/${id}`);
 
-export const createBudget = (data) =>
-    api.post('/budget', data);
+// Get budget by ID
+export const fetchBudgetById = (id) => {
+    return api.get(`/budget/${id}`);
+};
 
-export const updateBudget = (id, data) =>
-    api.put(`/budget/${id}`, data);
+// Create new budget
+export const createBudget = (data) => {
+    return api.post('/budget', data);
+};
 
-export const deleteBudget = (id) =>
-    api.delete(`/budget/${id}`);
+// Update budget
+export const updateBudget = (id, data) => {
+    return api.put(`/budget/${id}`, data);
+};
 
-export const fetchBudgetSummary = () =>
-    api.get('/budget/summary');
+// Delete single budget
+export const deleteBudget = (id) => {
+    return api.delete(`/budget/${id}`);
+};
 
+// Delete ALL budgets
+export const deleteAllBudgets = () => {
+    return api.delete('/budget/delete-all');
+};
 
+// Add spent amount to budget
+export const addSpentAmount = (id, data) => {
+    return api.put(`/budget/spent/${id}`, data);
+};
 /* --- Goals --- */
 // In your api.jsx
 export const fetchGoals = (page = 0, size = 12) => {

@@ -13,6 +13,22 @@ import {
 } from '../../services/api.jsx';
 
 /* ===========================
+   CONSTANTS & ENUMS
+=========================== */
+const TRANSACTION_CATEGORIES = [
+    'GROCERIES', 'RENT', 'UTILITIES', 'TRANSPORT', 'HEALTHCARE', 'INSURANCE',
+    'DINING', 'ENTERTAINMENT', 'SHOPPING', 'TRAVEL', 'EDUCATION', 'CHILDCARE',
+    'PERSONAL_CARE', 'INVESTMENT', 'SAVINGS', 'LOAN_EMI', 'TAX', 'SALARY',
+    'BUSINESS_INCOME', 'FREELANCE_INCOME', 'INTEREST_INCOME', 'DONATION', 'GIFTS', 'OTHER'
+];
+
+const TRANSACTION_SOURCES = [
+    'BANK_TRANSFER', 'UPI', 'DEBIT_CARD', 'CREDIT_CARD', 'WALLET', 'NET_BANKING',
+    'CASH', 'BROKERAGE', 'MUTUAL_FUND', 'STOCK_MARKET', 'EMPLOYER', 'BUSINESS',
+    'FREELANCE_CLIENT', 'AUTO_DEBIT', 'REFUND', 'ADJUSTMENT', 'OTHER'
+];
+
+/* ===========================
    FORMATTERS
 =========================== */
 const formatCurrency = (amount) =>
@@ -27,6 +43,15 @@ const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric'
     });
+};
+
+// Converts 'BANK_TRANSFER' to 'Bank Transfer' for cleaner UI
+const formatEnumText = (text) => {
+    if (!text) return '';
+    return text
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
 };
 
 /* ===========================
@@ -71,15 +96,11 @@ export default function Transactions() {
     /* -------------------------
        STATES
     ------------------------- */
-    // Pagination Data
     const [transactions, setTransactions] = useState([]);
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(false);
-
-    // Server Stats
     const [stats, setStats] = useState({ totalIncome: 0, totalExpense: 0, netSavings: 0 });
 
-    // UI States
     const [isLoading, setIsLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -91,8 +112,12 @@ export default function Transactions() {
        FORM
     ------------------------- */
     const initialForm = {
-        type: 'EXPENSE', description: '', amount: '', category: 'OTHER',
-        source: 'CASH', transactionDate: new Date().toISOString().split('T')[0]
+        type: 'EXPENSE',
+        description: '',
+        amount: '',
+        category: 'OTHER',
+        source: 'CASH',
+        transactionDate: new Date().toISOString().split('T')[0]
     };
     const [formData, setFormData] = useState(initialForm);
 
@@ -103,8 +128,6 @@ export default function Transactions() {
         try {
             const res = await fetchTransactionNetAmount();
             const data = res.data || res;
-
-            // Safely map the Spring Boot JSON exactly to the React state
             setStats({
                 totalIncome: data.totalIncome || 0,
                 totalExpense: data.totalExpense || 0,
@@ -122,9 +145,9 @@ export default function Transactions() {
 
             if (data && data.content) {
                 if (pageNumber === 0) {
-                    setTransactions(data.content); // Replace list on new search or init
+                    setTransactions(data.content);
                 } else {
-                    setTransactions(prev => [...prev, ...data.content]); // Append on Load More
+                    setTransactions(prev => [...prev, ...data.content]);
                 }
                 setPage(pageNumber);
                 setHasMore(!data.last);
@@ -156,7 +179,6 @@ export default function Transactions() {
     /* -------------------------
        SEARCH DEBOUNCE
     ------------------------- */
-    // This effect handles BOTH the initial mount load AND typing in the search bar
     useEffect(() => {
         const timer = setTimeout(() => {
             loadInitialData(searchKeyword);
@@ -171,8 +193,11 @@ export default function Transactions() {
         if (txn) {
             setEditingId(txn.id);
             setFormData({
-                type: txn.type, description: txn.description, amount: txn.amount,
-                category: txn.category || 'OTHER', source: txn.source || 'CASH',
+                type: txn.type,
+                description: txn.description,
+                amount: txn.amount,
+                category: txn.category || 'OTHER',
+                source: txn.source || 'CASH',
                 transactionDate: txn.transactionDate ? new Date(txn.transactionDate).toISOString().split('T')[0] : ''
             });
         } else {
@@ -193,7 +218,7 @@ export default function Transactions() {
                 await createTransaction(payload);
             }
             setIsModalOpen(false);
-            await loadInitialData(searchKeyword); // Reload from page 0 to show changes
+            await loadInitialData(searchKeyword);
         } catch {
             alert('Failed to save transaction');
         } finally {
@@ -202,10 +227,10 @@ export default function Transactions() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure?')) return;
+        if (!window.confirm('Are you sure you want to delete this transaction?')) return;
         try {
             await deleteTransaction(id);
-            await loadInitialData(searchKeyword); // Reload from page 0
+            await loadInitialData(searchKeyword);
         } catch {
             alert('Failed to delete');
         }
@@ -273,7 +298,7 @@ export default function Transactions() {
                                         <div className="text-xs text-zinc-500 flex gap-2 mt-1 font-medium tracking-wide">
                                             <span>{formatDate(txn.transactionDate)}</span>
                                             <span>•</span>
-                                            <span>{txn.category}</span>
+                                            <span>{formatEnumText(txn.category)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -324,7 +349,7 @@ export default function Transactions() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            {/* NEW: Type Toggle */}
+                            {/* Type Toggle */}
                             <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-900 rounded-xl mb-4">
                                 <button type="button" onClick={() => setFormData({ ...formData, type: 'EXPENSE' })} className={`py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'EXPENSE' ? 'bg-zinc-800 text-rose-400 shadow-sm' : 'text-zinc-500 hover:text-white'}`}>
                                     Expense
@@ -334,11 +359,13 @@ export default function Transactions() {
                                 </button>
                             </div>
 
+                            {/* Description */}
                             <div>
                                 <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Description</label>
                                 <input required placeholder="e.g. Salary, Groceries" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20" />
                             </div>
 
+                            {/* Amount & Date */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Amount</label>
@@ -350,6 +377,41 @@ export default function Transactions() {
                                 </div>
                             </div>
 
+                            {/* Category & Source */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Category</label>
+                                    <select
+                                        required
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                        className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20 appearance-none cursor-pointer"
+                                    >
+                                        {TRANSACTION_CATEGORIES.map(category => (
+                                            <option key={category} value={category} className="bg-zinc-900 text-white">
+                                                {formatEnumText(category)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Source</label>
+                                    <select
+                                        required
+                                        value={formData.source}
+                                        onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                                        className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20 appearance-none cursor-pointer"
+                                    >
+                                        {TRANSACTION_SOURCES.map(source => (
+                                            <option key={source} value={source} className="bg-zinc-900 text-white">
+                                                {formatEnumText(source)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Submit Button */}
                             <button type="submit" disabled={isSubmitting} className="w-full bg-white text-black py-3.5 rounded-xl font-bold mt-4 hover:bg-zinc-200 transition-colors disabled:opacity-70 flex justify-center items-center gap-2">
                                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {isSubmitting ? 'Saving...' : 'Save Transaction'}
