@@ -6,7 +6,7 @@ import {
     Shield, Tv, Utensils, Plane, Dumbbell, Sparkles,
     PiggyBank, Landmark, CreditCard, FileText, Repeat,
     Wifi, Smartphone, GraduationCap, Baby, Gift, HandHeart,
-    Briefcase, Building, AlertTriangle, HelpCircle, PlusCircle, PowerOff
+    Briefcase, Building, AlertTriangle, HelpCircle, PlusCircle, Search
 } from 'lucide-react';
 
 import {
@@ -18,6 +18,9 @@ import {
     addSpentAmount
 } from "../../services/api.jsx";
 
+/* ===========================
+   CONSTANTS & ENUMS
+=========================== */
 const BUDGET_CATEGORIES = [
     { value: 'GROCERIES', label: 'Groceries', icon: ShoppingCart },
     { value: 'RENT', label: 'Rent', icon: Home },
@@ -49,6 +52,11 @@ const BUDGET_CATEGORIES = [
     { value: 'MISCELLANEOUS', label: 'Miscellaneous', icon: HelpCircle }
 ];
 
+/* ===========================
+   STYLING CONSTANTS
+=========================== */
+const INPUT_BASE = "w-full bg-zinc-900/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/30 focus:bg-zinc-900/80 focus:ring-4 focus:ring-white/5 transition-all duration-300 placeholder:text-zinc-600";
+
 const getBudgetIcon = (cat) => BUDGET_CATEGORIES.find(c => c.value === cat)?.icon || Wallet;
 
 const formatINR = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0);
@@ -57,19 +65,19 @@ const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', {
 
 const getStatusColor = (status) => {
     switch (status) {
-        case 'SAFE': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-        case 'WARNING': return 'text-orange-500 bg-orange-500/10 border-orange-500/20';
-        case 'DANGER': return 'text-red-500 bg-red-500/10 border-red-500/20';
-        default: return 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20';
+        case 'SAFE': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+        case 'WARNING': return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
+        case 'DANGER': return 'text-red-400 bg-red-500/10 border-red-500/20';
+        default: return 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20';
     }
 };
 
 const getProgressColor = (status) => {
     switch (status) {
-        case 'SAFE': return 'bg-emerald-500';
-        case 'WARNING': return 'bg-orange-500';
-        case 'DANGER': return 'bg-red-500';
-        default: return 'bg-violet-500';
+        case 'SAFE': return 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+        case 'WARNING': return 'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]';
+        case 'DANGER': return 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]';
+        default: return 'bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.5)]';
     }
 };
 
@@ -78,6 +86,9 @@ const INITIAL_FORM = {
     startDate: '', endDate: '', recurring: false, note: '', mode: 'ACTIVE'
 };
 
+/* ===========================
+   MAIN COMPONENT
+=========================== */
 export default function Budgets() {
     const [budgets, setBudgets] = useState([]);
     const [page, setPage] = useState(0);
@@ -86,6 +97,7 @@ export default function Budgets() {
 
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [searchKeyword, setSearchKeyword] = useState("");
     const [expenseTitle, setExpenseTitle] = useState("");
 
     // Modals state
@@ -126,7 +138,6 @@ export default function Budgets() {
                 setPage(pageNumber);
                 setHasMore(!data.last);
             } else {
-                // Fallback for non-paginated API responses
                 const fallbackData = Array.isArray(data) ? data : (data.content || []);
                 setBudgets(pageNumber === 0 ? fallbackData : [...budgets, ...fallbackData]);
                 setHasMore(false);
@@ -160,15 +171,10 @@ export default function Budgets() {
         setEditing(budget);
         if (budget) {
             setFormData({
-                title: budget.title,
-                category: budget.category,
-                amountAllocated: budget.amountAllocated,
-                amountSpent: budget.amountSpent,
-                startDate: budget.startDate,
-                endDate: budget.endDate,
-                recurring: budget.recurring,
-                note: budget.note || '',
-                mode: budget.mode || 'ACTIVE'
+                title: budget.title, category: budget.category,
+                amountAllocated: budget.amountAllocated, amountSpent: budget.amountSpent,
+                startDate: budget.startDate, endDate: budget.endDate,
+                recurring: budget.recurring, note: budget.note || '', mode: budget.mode || 'ACTIVE'
             });
         } else {
             const now = new Date();
@@ -203,7 +209,6 @@ export default function Budgets() {
         try {
             if (editing) await updateBudget(editing.id, payload);
             else await createBudget(payload);
-
             await loadInitialData();
             setModalOpen(false);
         } catch (err) {
@@ -215,7 +220,6 @@ export default function Budgets() {
 
     const handleExpenseSubmit = async (e) => {
         e.preventDefault();
-
         if (!expenseTitle.trim() || !expenseAmount || Number(expenseAmount) <= 0) return;
         setFormLoading(true);
 
@@ -224,11 +228,8 @@ export default function Budgets() {
                 title: expenseTitle,
                 amount: parseFloat(expenseAmount)
             });
-
             await loadInitialData();
             setSpentOpen(false);
-
-            // reset form
             setExpenseAmount("");
             setExpenseTitle("");
         } catch (err) {
@@ -249,6 +250,11 @@ export default function Budgets() {
         }
     };
 
+    const filteredBudgets = budgets.filter(b =>
+        b.title?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        b.category?.toLowerCase().includes(searchKeyword.toLowerCase())
+    );
+
     if (loading && budgets.length === 0) {
         return (
             <div className="min-h-screen bg-black flex justify-center items-center text-white">
@@ -258,18 +264,34 @@ export default function Budgets() {
     }
 
     return (
-        <div className="min-h-screen bg-black text-white p-6 md:p-10">
+        <div className="min-h-screen bg-black text-white p-6 md:p-10 font-sans">
             <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                    <h2 className="text-4xl font-bold mb-2">Budgets</h2>
+                    <h2 className="text-4xl font-bold mb-2 tracking-tight">Budgets</h2>
                     <p className="text-zinc-500 text-lg">Manage allocations and track spending</p>
                 </div>
-                <button
-                    onClick={() => openFormModal()}
-                    className="bg-white text-black px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-zinc-200 transition-colors"
-                >
-                    <Plus size={20} /> Create Budget
-                </button>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                    {/* Search Bar */}
+                    <div className="relative group">
+                        <Search className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 transition-colors group-focus-within:text-white" />
+                        <input
+                            type="text"
+                            placeholder="Search budgets..."
+                            value={searchKeyword}
+                            onChange={(e) => setSearchKeyword(e.target.value)}
+                            className="w-full sm:w-64 bg-zinc-900/50 border border-white/10 rounded-full pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 focus:bg-zinc-900 focus:ring-4 focus:ring-white/5 transition-all duration-300 placeholder:text-zinc-600"
+                        />
+                    </div>
+
+                    <button
+                        onClick={() => openFormModal()}
+                        className="group flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-full font-bold hover:bg-zinc-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all duration-300 active:scale-95"
+                    >
+                        <Plus size={18} className="transition-transform duration-300 group-hover:rotate-90" />
+                        <span>Create Budget</span>
+                    </button>
+                </div>
             </header>
 
             <div className="grid md:grid-cols-3 gap-6 mb-10">
@@ -279,12 +301,12 @@ export default function Budgets() {
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {budgets.length === 0 ? (
-                    <div className="col-span-full py-20 text-center border border-dashed border-zinc-800 rounded-2xl">
-                        <p className="text-zinc-500">No active budgets found.</p>
+                {filteredBudgets.length === 0 ? (
+                    <div className="col-span-full py-20 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-900/10 hover:bg-zinc-900/20 transition-colors">
+                        <p className="text-zinc-400">No active budgets found.</p>
                     </div>
                 ) : (
-                    budgets.map(budget => (
+                    filteredBudgets.map(budget => (
                         <BudgetCard
                             key={budget.id}
                             budget={budget}
@@ -296,14 +318,14 @@ export default function Budgets() {
                 )}
             </div>
 
-            {hasMore && (
-                <div className="mt-10 flex justify-center">
+            {hasMore && !searchKeyword && (
+                <div className="mt-12 flex justify-center">
                     <button
                         onClick={handleLoadMore}
                         disabled={loadingMore}
-                        className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-zinc-800 text-white rounded-full font-medium hover:bg-zinc-800 hover:border-zinc-700 transition-all active:scale-95 disabled:opacity-50"
+                        className="group flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-zinc-800 text-white rounded-full font-medium hover:bg-zinc-800 hover:border-zinc-700 hover:shadow-lg transition-all duration-300 active:scale-95 disabled:opacity-50"
                     >
-                        {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                        {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />}
                         <span>{loadingMore ? 'Loading...' : 'Load More Budgets'}</span>
                     </button>
                 </div>
@@ -311,43 +333,37 @@ export default function Budgets() {
 
             {/* CREATE / EDIT FORM MODAL */}
             {modalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 transition-all animate-in fade-in duration-200">
-                    <div className="bg-zinc-950 border border-white/10 shadow-2xl shadow-black/50 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-
-                        {/* Header */}
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 animate-[fadeIn_0.2s_ease-out]">
+                    <div className="bg-zinc-950 border border-white/10 shadow-2xl shadow-black/50 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-[scaleIn_0.2s_ease-out]">
                         <div className="flex justify-between items-center p-6 pb-4 border-b border-white/5">
                             <h3 className="text-xl font-semibold text-white tracking-tight">
                                 {editing ? 'Edit Budget' : 'Create Budget'}
                             </h3>
                             <button
                                 onClick={() => setModalOpen(false)}
-                                className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                                className="p-2 -mr-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        {/* Scrollable Form Body */}
-                        <div className="overflow-y-auto p-6">
+                        <div className="overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
                             <form id="budget-form" onSubmit={handleSubmit} className="flex flex-col gap-5">
-
-                                {/* Title - Full Width */}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Title</label>
+                                <div className="group flex flex-col gap-1.5">
+                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">Title</label>
                                     <input
                                         type="text" name="title" value={formData.title} onChange={handleChange} required
                                         placeholder="e.g. Grocery Fund"
-                                        className="bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20"
+                                        className={INPUT_BASE}
                                     />
                                 </div>
 
-                                {/* Category & Mode */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Category</label>
+                                    <div className="group flex flex-col gap-1.5">
+                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">Category</label>
                                         <select
                                             name="category" value={formData.category} onChange={handleChange} required
-                                            className="bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20 appearance-none cursor-pointer"
+                                            className={`${INPUT_BASE} appearance-none cursor-pointer`}
                                         >
                                             <option value="" disabled className="text-zinc-500">Select category...</option>
                                             {BUDGET_CATEGORIES.map(cat => (
@@ -356,11 +372,11 @@ export default function Budgets() {
                                         </select>
                                     </div>
 
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Status Mode</label>
+                                    <div className="group flex flex-col gap-1.5">
+                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">Status Mode</label>
                                         <select
                                             name="mode" value={formData.mode} onChange={handleChange} required
-                                            className="bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20 appearance-none cursor-pointer"
+                                            className={`${INPUT_BASE} appearance-none cursor-pointer`}
                                         >
                                             <option value="ACTIVE" className="bg-zinc-900">Active</option>
                                             <option value="SUSPENDED" className="bg-zinc-900">Suspended</option>
@@ -368,58 +384,55 @@ export default function Budgets() {
                                     </div>
                                 </div>
 
-                                {/* Amounts */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Allocated Amount (₹)</label>
+                                    <div className="group flex flex-col gap-1.5">
+                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">Allocated Amount (₹)</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-medium">₹</span>
                                             <input
                                                 type="number" name="amountAllocated" value={formData.amountAllocated} onChange={handleChange} required min="0" step="0.01"
                                                 placeholder="0.00"
-                                                className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 pl-7 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20"
+                                                className={`${INPUT_BASE} pl-7 font-mono`}
                                             />
                                         </div>
                                     </div>
                                     {editing && (
-                                        <div className="flex flex-col gap-1.5">
-                                            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Already Spent (₹)</label>
+                                        <div className="group flex flex-col gap-1.5">
+                                            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">Already Spent (₹)</label>
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-medium">₹</span>
                                                 <input
                                                     type="number" name="amountSpent" value={formData.amountSpent} onChange={handleChange} min="0" step="0.01"
                                                     placeholder="0.00"
-                                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 pl-7 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20"
+                                                    className={`${INPUT_BASE} pl-7 font-mono`}
                                                 />
                                             </div>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* Dates */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Start Date</label>
+                                    <div className="group flex flex-col gap-1.5">
+                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">Start Date</label>
                                         <input
                                             type="date" name="startDate" value={formData.startDate} onChange={handleChange} required
-                                            className="bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20 [color-scheme:dark] cursor-pointer"
+                                            className={`${INPUT_BASE} [color-scheme:dark] cursor-pointer`}
                                         />
                                     </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">End Date</label>
+                                    <div className="group flex flex-col gap-1.5">
+                                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">End Date</label>
                                         <input
                                             type="date" name="endDate" value={formData.endDate} onChange={handleChange} required
-                                            className="bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20 [color-scheme:dark] cursor-pointer"
+                                            className={`${INPUT_BASE} [color-scheme:dark] cursor-pointer`}
                                         />
                                     </div>
                                 </div>
 
-                                {/* Notes */}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Notes (Optional)</label>
+                                <div className="group flex flex-col gap-1.5">
+                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">Notes (Optional)</label>
                                     <textarea
                                         name="note" value={formData.note} onChange={handleChange} placeholder="Any details about this budget..." rows="2"
-                                        className="bg-zinc-900/50 border border-white/10 rounded-xl p-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20 resize-none"
+                                        className={`${INPUT_BASE} resize-none`}
                                     />
                                 </div>
 
@@ -427,7 +440,7 @@ export default function Budgets() {
                                     <div className="relative flex items-center justify-center w-5 h-5">
                                         <input
                                             type="checkbox" name="recurring" checked={formData.recurring} onChange={handleChange}
-                                            className="peer appearance-none w-full h-full border-2 border-zinc-700 rounded-md bg-zinc-900/50 checked:bg-violet-600 checked:border-violet-600 focus:ring-2 focus:ring-violet-500/30 focus:ring-offset-2 focus:ring-offset-zinc-950 transition-all cursor-pointer"
+                                            className="peer appearance-none w-full h-full border-2 border-zinc-700 rounded-md bg-zinc-900/50 checked:bg-violet-600 checked:border-violet-600 focus:ring-2 focus:ring-violet-500/30 transition-all cursor-pointer"
                                         />
                                         <CheckCircle2 size={14} strokeWidth={3} className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" />
                                     </div>
@@ -438,12 +451,11 @@ export default function Budgets() {
                             </form>
                         </div>
 
-                        {/* Footer */}
                         <div className="p-6 pt-4 border-t border-white/5 bg-zinc-950/50 flex justify-end gap-3 mt-auto">
                             <button
                                 type="button"
                                 onClick={() => setModalOpen(false)}
-                                className="px-5 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
+                                className="px-5 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-all active:scale-95"
                             >
                                 Cancel
                             </button>
@@ -451,50 +463,45 @@ export default function Budgets() {
                                 form="budget-form"
                                 type="submit"
                                 disabled={formLoading}
-                                className="flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-zinc-200 hover:scale-[0.98] active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none min-w-[130px] shadow-lg shadow-white/10"
+                                className="flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-zinc-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:scale-[0.98] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none min-w-[130px]"
                             >
                                 {formLoading ? <Loader2 size={16} className="animate-spin text-zinc-600" /> : 'Save Budget'}
                             </button>
                         </div>
-
                     </div>
                 </div>
             )}
 
             {/* ADD EXPENSE MODAL */}
             {spentOpen && selectedBudget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 transition-all animate-in fade-in duration-200">
-                    <div className="bg-zinc-950 border border-white/10 shadow-2xl shadow-black/50 rounded-2xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-
-                        {/* Header */}
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 animate-[fadeIn_0.2s_ease-out]">
+                    <div className="bg-zinc-950 border border-white/10 shadow-2xl shadow-black/50 rounded-2xl w-full max-w-sm flex flex-col overflow-hidden animate-[scaleIn_0.2s_ease-out]">
                         <div className="flex justify-between items-center p-6 pb-4 border-b border-white/5">
                             <h3 className="text-xl font-semibold text-white tracking-tight">Add Expense</h3>
                             <button
                                 onClick={() => setSpentOpen(false)}
-                                className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                                className="p-2 -mr-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90"
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        {/* Body */}
                         <div className="p-6">
-                            {/* Context Card */}
-                            <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-4 mb-6 flex flex-col gap-2">
+                            <div className="bg-zinc-900/50 border border-white/5 rounded-xl p-4 mb-6 flex flex-col gap-3 shadow-inner">
                                 <div className="flex justify-between items-center text-sm">
-                                    <span className="text-zinc-500 font-medium">Budget</span>
+                                    <span className="text-zinc-500 font-medium">Budget Target</span>
                                     <span className="text-zinc-200 font-semibold">{selectedBudget.title}</span>
                                 </div>
+                                <div className="h-px w-full bg-white/5"></div>
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-zinc-500 font-medium">Currently Spent</span>
-                                    <span className="text-zinc-200 font-semibold">{formatINR(selectedBudget.amountSpent)}</span>
+                                    <span className="text-zinc-200 font-semibold font-mono">{formatINR(selectedBudget.amountSpent)}</span>
                                 </div>
                             </div>
 
                             <form id="expense-form" onSubmit={handleExpenseSubmit} className="flex flex-col gap-4">
-                                {/* TITLE */}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                                <div className="group flex flex-col gap-1.5">
+                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">
                                         Expense Title
                                     </label>
                                     <input
@@ -502,14 +509,13 @@ export default function Budgets() {
                                         value={expenseTitle}
                                         onChange={(e) => setExpenseTitle(e.target.value)}
                                         required
-                                        placeholder="e.g. Groceries, Netflix, Food delivery"
-                                        className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20"
+                                        placeholder="e.g. Groceries, Netflix, Delivery"
+                                        className={INPUT_BASE}
                                     />
                                 </div>
 
-                                {/* AMOUNT */}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                                <div className="group flex flex-col gap-1.5">
+                                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider group-focus-within:text-zinc-300 transition-colors">
                                         Amount to Add (₹)
                                     </label>
                                     <div className="relative">
@@ -522,19 +528,18 @@ export default function Budgets() {
                                             min="0.01"
                                             step="0.01"
                                             placeholder="0.00"
-                                            className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 pl-7 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/80 transition-all hover:border-white/20"
+                                            className={`${INPUT_BASE} pl-7 font-mono`}
                                         />
                                     </div>
                                 </div>
                             </form>
                         </div>
 
-                        {/* Footer */}
                         <div className="p-6 pt-4 border-t border-white/5 bg-zinc-950/50 flex justify-end gap-3 mt-auto">
                             <button
                                 type="button"
                                 onClick={() => setSpentOpen(false)}
-                                className="px-5 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-all"
+                                className="px-5 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition-all active:scale-95"
                             >
                                 Cancel
                             </button>
@@ -542,45 +547,72 @@ export default function Budgets() {
                                 form="expense-form"
                                 type="submit"
                                 disabled={formLoading}
-                                className="flex items-center justify-center gap-2 bg-violet-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-violet-500 hover:scale-[0.98] active:scale-95 transition-all disabled:opacity-50 disabled:pointer-events-none min-w-[130px] shadow-lg shadow-violet-900/20"
+                                className="flex items-center justify-center gap-2 bg-violet-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-violet-500 hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:scale-[0.98] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:pointer-events-none min-w-[130px]"
                             >
                                 {formLoading ? <Loader2 size={16} className="animate-spin text-white/70" /> : 'Add Expense'}
                             </button>
                         </div>
-
                     </div>
                 </div>
             )}
 
             {/* DELETE MODAL */}
             {deleteOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm text-center">
-                        <h3 className="text-xl font-bold mb-2 text-red-500">Delete Budget?</h3>
-                        <p className="text-sm text-zinc-400 mb-6">This action cannot be undone. Are you sure you want to remove this budget?</p>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-[fadeIn_0.2s_ease-out]">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl animate-[scaleIn_0.2s_ease-out]">
+                        <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-5 text-red-500 ring-4 ring-red-500/5">
+                            <Trash2 className="w-6 h-6" />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2 text-white">Delete Budget?</h3>
+                        <p className="text-sm text-zinc-400 mb-8 leading-relaxed">This action cannot be undone. Are you sure you want to remove this budget?</p>
                         <div className="flex justify-center gap-3">
-                            <button onClick={() => setDeleteOpen(false)} className="px-6 py-2 text-sm font-medium text-zinc-400 hover:text-white transition-colors">
+                            <button onClick={() => setDeleteOpen(false)} className="w-full py-3 bg-zinc-900 border border-zinc-800 text-white font-medium rounded-xl hover:bg-zinc-800 hover:border-zinc-700 transition-all active:scale-95">
                                 Cancel
                             </button>
-                            <button onClick={handleDelete} className="bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-2 rounded-lg text-sm font-bold hover:bg-red-500 hover:text-white transition-colors">
+                            <button onClick={handleDelete} className="w-full py-3 bg-red-600 text-white font-medium rounded-xl hover:bg-red-500 hover:shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all active:scale-95">
                                 Delete
                             </button>
                         </div>
                     </div>
                 </div>
             )}
+
+            {/* Custom keyframes for modals */}
+            <style dangerouslySetInnerHTML={{__html: `
+                @keyframes scaleIn {
+                    from { opacity: 0; transform: scale(0.95); }
+                    to { opacity: 1; transform: scale(1); }
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            `}} />
         </div>
     );
 }
 
+/* ===========================
+   SUB-COMPONENTS
+=========================== */
 function SummaryCard({ icon: Icon, label, value, color = 'text-white' }) {
+    // Dynamic glow color mapping based on the text color class passed
+    const glowClass = color.includes('violet')
+        ? 'group-hover:shadow-[0_0_20px_rgba(167,139,250,0.15)] group-hover:border-violet-500/30'
+        : color.includes('emerald')
+            ? 'group-hover:shadow-[0_0_20px_rgba(52,211,153,0.15)] group-hover:border-emerald-500/30'
+            : 'group-hover:shadow-[0_0_20px_rgba(255,255,255,0.05)] group-hover:border-zinc-700';
+
     return (
-        <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-6">
-            <div className={`flex items-center gap-3 mb-2 ${color}`}>
-                <Icon size={20} />
-                <span className="text-xs font-bold uppercase">{label}</span>
+        <div className={`bg-black border border-white/10 rounded-2xl p-6 relative overflow-hidden group transition-all duration-300 hover:-translate-y-1.5 ${glowClass} hover:bg-zinc-950/50`}>
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className={`flex items-center gap-3 mb-3 relative z-10 transition-colors duration-300 ${color}`}>
+                <div className="p-2.5 bg-zinc-900 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                    <Icon size={20} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 group-hover:text-zinc-400 transition-colors">{label}</span>
             </div>
-            <p className="text-3xl font-bold">{formatINR(value)}</p>
+            <p className={`text-3xl font-bold tracking-tight relative z-10 transition-colors duration-300 ${color}`}>{formatINR(value)}</p>
         </div>
     );
 }
@@ -588,89 +620,93 @@ function SummaryCard({ icon: Icon, label, value, color = 'text-white' }) {
 function BudgetCard({ budget, onEdit, onDelete, onAddExpense }) {
     const Icon = getBudgetIcon(budget.category);
     const percent = budget.amountAllocated > 0 ? Math.min((budget.amountSpent / budget.amountAllocated) * 100, 100) : 0;
-
     const isSuspended = budget.mode === 'SUSPENDED';
 
     return (
-        <div className={`bg-black border rounded-2xl p-6 hover:border-violet-500/50 group transition-colors flex flex-col h-full ${isSuspended ? 'border-zinc-800 opacity-75' : 'border-white/10'}`}>
-            <div className="flex justify-between mb-4">
+        <div className={`bg-black border rounded-2xl p-6 group transition-all duration-300 flex flex-col h-full 
+            ${isSuspended
+            ? 'border-zinc-800 opacity-75 grayscale-[0.5] hover:grayscale-0 hover:opacity-100'
+            : 'border-white/10 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-violet-500/10 hover:border-violet-500/50 hover:bg-zinc-950/50'}`}>
+
+            <div className="flex justify-between items-start mb-6">
                 <div className="flex gap-4">
-                    <div className="w-10 h-10 bg-zinc-900 border border-zinc-800 rounded-lg flex justify-center items-center">
-                        <Icon size={20} className={isSuspended ? 'text-zinc-500' : 'text-white'} />
+                    <div className="w-12 h-12 bg-zinc-900 border border-zinc-800 rounded-xl flex justify-center items-center group-hover:bg-zinc-800 transition-colors duration-300">
+                        <Icon size={22} className={isSuspended ? 'text-zinc-500' : 'text-zinc-300 group-hover:text-white transition-colors'} />
                     </div>
                     <div>
-                        <h3 className={`font-bold text-lg ${isSuspended ? 'text-zinc-400 line-through decoration-zinc-600' : 'text-white'}`}>
+                        <h3 className={`font-bold text-lg group-hover:text-violet-50 transition-colors ${isSuspended ? 'text-zinc-400 line-through decoration-zinc-600' : 'text-white'}`}>
                             {budget.title}
                         </h3>
-                        <div className="flex gap-2 mt-1 flex-wrap items-center">
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-zinc-500 uppercase">
+                        <div className="flex gap-2 mt-1.5 flex-wrap items-center">
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 uppercase font-medium border border-zinc-800">
                                 {budget.category.replace(/_/g, ' ')}
                             </span>
                             <span className={`text-[10px] px-2 py-0.5 rounded uppercase font-bold border ${isSuspended ? 'text-orange-400 border-orange-400/30 bg-orange-400/10' : 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10'}`}>
                                 {budget.mode || 'ACTIVE'}
                             </span>
-                            {budget.recurring && (
-                                <span className="text-[10px] flex items-center gap-1 text-zinc-600 ml-1">
-                                    <CheckCircle2 size={12} /> Recurring
-                                </span>
-                            )}
                         </div>
                     </div>
                 </div>
-                {/* Visual Status calculated from API */}
-                <div className={`px-2 py-1 h-fit text-[10px] border rounded font-bold ${getStatusColor(budget.status)}`}>
+                <div className={`px-2.5 py-1 h-fit text-[10px] border rounded-md font-bold tracking-wider uppercase shadow-sm ${getStatusColor(budget.status)}`}>
                     {budget.status || 'SAFE'}
                 </div>
             </div>
 
-            <div className="flex justify-between mb-2 mt-auto">
+            <div className="flex justify-between items-end mb-3 mt-auto">
                 <div>
-                    <span className="text-2xl font-bold">{formatINR(budget.amountSpent)}</span>
-                    <p className="text-xs text-zinc-500">Spent</p>
+                    <span className="text-3xl font-bold tracking-tight text-white">{formatINR(budget.amountSpent)}</span>
+                    <p className="text-xs text-zinc-500 font-medium mt-0.5">Spent</p>
                 </div>
                 <div className="text-right">
                     <span className="text-sm font-bold text-zinc-400">{formatINR(budget.amountAllocated)}</span>
-                    <p className="text-xs text-zinc-500">Allocated</p>
+                    <p className="text-xs text-zinc-500 font-medium mt-0.5">Allocated</p>
                 </div>
             </div>
 
-            <div className="h-2 bg-zinc-800 rounded mb-4 overflow-hidden">
-                <div className={`h-full rounded transition-all duration-500 ${isSuspended ? 'bg-zinc-600' : getProgressColor(budget.status)}`} style={{ width: `${percent}%` }} />
+            <div className="h-2.5 bg-zinc-900 border border-white/5 rounded-full mb-5 overflow-hidden relative">
+                <div className={`h-full rounded-full transition-all duration-1000 ease-out ${isSuspended ? 'bg-zinc-600' : getProgressColor(budget.status)}`} style={{ width: `${percent}%` }} />
             </div>
 
-            <div className="flex justify-between items-center pt-4 border-t border-white/5">
+            <div className="flex justify-between items-center pt-5 border-t border-white/5">
                 <div>
-                    <p className="font-bold">{formatINR(budget.remainingAmount)}</p>
-                    <p className="text-[10px] text-zinc-500">Remaining</p>
+                    <p className="font-bold text-lg text-zinc-200">{formatINR(budget.remainingAmount)}</p>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Remaining</p>
                 </div>
 
                 <div className="flex items-center gap-1">
                     <button
                         onClick={onAddExpense}
                         disabled={isSuspended}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-violet-600/20 text-violet-400 border border-violet-500/30 hover:bg-violet-600 hover:text-white rounded-lg text-xs font-semibold transition-colors mr-2 disabled:opacity-50 disabled:pointer-events-none"
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-violet-600/10 text-violet-400 border border-violet-500/20 hover:bg-violet-600 hover:text-white hover:border-violet-500 rounded-xl text-xs font-bold transition-all mr-2 disabled:opacity-50 disabled:pointer-events-none hover:shadow-[0_0_15px_rgba(139,92,246,0.4)] active:scale-95"
                     >
                         <PlusCircle size={14} /> Add
                     </button>
 
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={onEdit} className="p-2 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-colors" title="Edit Budget">
+                    <div className="flex gap-1 opacity-0 translate-x-2 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
+                        <button onClick={onEdit} className="p-2.5 hover:bg-zinc-800 rounded-xl text-zinc-500 hover:text-white transition-all hover:scale-110 active:scale-95" title="Edit Budget">
                             <Edit2 size={16} />
                         </button>
-                        <button onClick={onDelete} className="p-2 hover:bg-red-900/20 rounded text-zinc-400 hover:text-red-400 transition-colors" title="Delete Budget">
+                        <button onClick={onDelete} className="p-2.5 hover:bg-red-900/20 rounded-xl text-zinc-500 hover:text-red-400 transition-all hover:scale-110 active:scale-95" title="Delete Budget">
                             <Trash2 size={16} />
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-white/5 text-[10px] text-zinc-600 flex gap-1 items-center">
-                <Calendar size={12} />
-                {formatDate(budget.startDate)} - {formatDate(budget.endDate)}
+            <div className="mt-4 flex justify-between items-center text-[10px] text-zinc-500 font-medium">
+                <div className="flex items-center gap-1.5">
+                    <Calendar size={12} className="text-zinc-600" />
+                    {formatDate(budget.startDate)} - {formatDate(budget.endDate)}
+                </div>
+                {budget.recurring && (
+                    <span className="flex items-center gap-1 text-violet-400/80 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">
+                        <Repeat size={10} /> Recurring
+                    </span>
+                )}
             </div>
 
             {budget.note && (
-                <div className="mt-2 text-[10px] text-zinc-500 italic truncate" title={budget.note}>
+                <div className="mt-3 p-2 bg-zinc-900/50 rounded-lg border border-white/5 text-[11px] text-zinc-400 italic truncate group-hover:text-zinc-300 transition-colors" title={budget.note}>
                     "{budget.note}"
                 </div>
             )}

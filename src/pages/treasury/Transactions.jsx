@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     ArrowUp, ArrowDown, Plus, Search, Filter, X, Edit2, Trash2, Wallet,
-    ArrowUpRight, ArrowDownLeft, Loader2, ChevronDown
+    ArrowUpRight, ArrowDownLeft, Loader2, ChevronDown, PiggyBank
 } from 'lucide-react';
 
 import {
@@ -15,18 +15,21 @@ import {
 /* ===========================
    CONSTANTS & ENUMS
 =========================== */
-const TRANSACTION_CATEGORIES = [
-    'GROCERIES', 'RENT', 'UTILITIES', 'TRANSPORT', 'HEALTHCARE', 'INSURANCE',
-    'DINING', 'ENTERTAINMENT', 'SHOPPING', 'TRAVEL', 'EDUCATION', 'CHILDCARE',
-    'PERSONAL_CARE', 'INVESTMENT', 'SAVINGS', 'LOAN_EMI', 'TAX', 'SALARY',
-    'BUSINESS_INCOME', 'FREELANCE_INCOME', 'INTEREST_INCOME', 'DONATION', 'GIFTS', 'OTHER'
+export const TRANSACTION_CATEGORIES = [
+    'GROCERIES', 'RENT', 'UTILITIES', 'TRANSPORT', 'DINING',
+    'ENTERTAINMENT', 'SHOPPING', 'HEALTHCARE', 'EDUCATION',
+    'INVESTMENT', 'SALARY', 'OTHER'
 ];
 
-const TRANSACTION_SOURCES = [
-    'BANK_TRANSFER', 'UPI', 'DEBIT_CARD', 'CREDIT_CARD', 'WALLET', 'NET_BANKING',
-    'CASH', 'BROKERAGE', 'MUTUAL_FUND', 'STOCK_MARKET', 'EMPLOYER', 'BUSINESS',
-    'FREELANCE_CLIENT', 'AUTO_DEBIT', 'REFUND', 'ADJUSTMENT', 'OTHER'
+export const TRANSACTION_SOURCES = [
+    'UPI', 'DEBIT_CARD', 'CREDIT_CARD', 'NET_BANKING',
+    'WALLET', 'CASH', 'BANK_TRANSFER', 'OTHER'
 ];
+
+/* ===========================
+   STYLING CONSTANTS
+=========================== */
+const INPUT_BASE = "w-full bg-zinc-900/30 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/30 focus:bg-zinc-900/80 focus:ring-4 focus:ring-white/5 transition-all duration-300 placeholder:text-zinc-600";
 
 /* ===========================
    FORMATTERS
@@ -45,7 +48,6 @@ const formatDate = (dateStr) => {
     });
 };
 
-// Converts 'BANK_TRANSFER' to 'Bank Transfer' for cleaner UI
 const formatEnumText = (text) => {
     if (!text) return '';
     return text
@@ -58,33 +60,42 @@ const formatEnumText = (text) => {
    STAT CARD
 =========================== */
 const StatCard = ({ label, value, type }) => {
-    let color = 'text-white';
-    let bg = 'bg-zinc-900';
-    let Icon = Wallet;
+    // Default styling (Net Position)
+    let color = 'text-white-400 group-hover:text-cyan-300';
+    let bg = 'bg-cyan-500/15 text-cyan-400 group-hover:bg-cyan-500/25 group-hover:text-cyan-300';
+    let Icon = PiggyBank ;
 
     if (type === 'INCOME') {
-        color = 'text-emerald-400';
-        bg = 'bg-emerald-500/10 text-emerald-400';
+        color = 'text-white-400 group-hover:text-emerald-300';
+        bg = 'bg-emerald-500/15 text-emerald-400 group-hover:bg-emerald-500/25 group-hover:text-emerald-300';
         Icon = ArrowUpRight;
     }
 
     if (type === 'EXPENSE') {
-        color = 'text-rose-400';
-        bg = 'bg-rose-500/10 text-rose-400';
+        color = 'text-white-400 group-hover:text-rose-300';
+        bg = 'bg-rose-500/15 text-rose-400 group-hover:bg-rose-500/25 group-hover:text-rose-300';
         Icon = ArrowDownLeft;
     }
 
+    if (type === 'ALLOCATED') {
+        color = 'text-white-400 group-hover:text-blue-300';
+        bg = 'bg-blue-500/15 text-blue-400 group-hover:bg-blue-500/25 group-hover:text-blue-300';
+        Icon = Wallet;
+    }
     return (
-        <div className="bg-black border border-white/10 rounded-2xl p-6">
-            <div className="mb-4">
-                <div className={`p-2.5 rounded-lg inline-block ${bg}`}>
+        <div className="bg-black border border-white/10 rounded-2xl p-6 relative overflow-hidden group transition-all duration-300 hover:-translate-y-1.5 hover:border-zinc-700 hover:shadow-2xl hover:shadow-white/5 hover:bg-zinc-950/50">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="mb-4 relative z-10">
+                <div className={`p-2.5 rounded-xl inline-block transition-all duration-300 group-hover:scale-110 ${bg}`}>
                     <Icon className="w-5 h-5" />
                 </div>
             </div>
-            <p className="text-zinc-500 text-xs uppercase mb-1">{label}</p>
-            <p className={`text-2xl font-bold ${color}`}>
-                {formatCurrency(value)}
-            </p>
+            <div className="relative z-10">
+                <p className="text-zinc-500 text-xs uppercase mb-1 font-medium group-hover:text-zinc-400 transition-colors">{label}</p>
+                <p className={`text-2xl font-bold tracking-tight transition-colors duration-300 ${color}`}>
+                    {formatCurrency(value)}
+                </p>
+            </div>
         </div>
     );
 };
@@ -99,7 +110,7 @@ export default function Transactions() {
     const [transactions, setTransactions] = useState([]);
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(false);
-    const [stats, setStats] = useState({ totalIncome: 0, totalExpense: 0, netSavings: 0 });
+    const [stats, setStats] = useState({ totalIncome: 0, totalExpense: 0, totalAllocated: 0, netSavings: 0 });
 
     const [isLoading, setIsLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -112,11 +123,8 @@ export default function Transactions() {
        FORM
     ------------------------- */
     const initialForm = {
-        type: 'EXPENSE',
-        description: '',
-        amount: '',
-        category: 'OTHER',
-        source: 'CASH',
+        type: 'EXPENSE', description: '', amount: '',
+        category: 'OTHER', source: 'CASH',
         transactionDate: new Date().toISOString().split('T')[0]
     };
     const [formData, setFormData] = useState(initialForm);
@@ -131,6 +139,7 @@ export default function Transactions() {
             setStats({
                 totalIncome: data.totalIncome || 0,
                 totalExpense: data.totalExpense || 0,
+                totalAllocated: data.totalAllocated || 0,
                 netSavings: data.netSavings || 0
             });
         } catch (err) {
@@ -144,11 +153,8 @@ export default function Transactions() {
             const data = res.data || res;
 
             if (data && data.content) {
-                if (pageNumber === 0) {
-                    setTransactions(data.content);
-                } else {
-                    setTransactions(prev => [...prev, ...data.content]);
-                }
+                if (pageNumber === 0) setTransactions(data.content);
+                else setTransactions(prev => [...prev, ...data.content]);
                 setPage(pageNumber);
                 setHasMore(!data.last);
             } else {
@@ -162,10 +168,7 @@ export default function Transactions() {
 
     const loadInitialData = useCallback(async (keyword = '') => {
         setIsLoading(true);
-        await Promise.all([
-            fetchDashboardStats(),
-            fetchPageData(keyword, 0)
-        ]);
+        await Promise.all([fetchDashboardStats(), fetchPageData(keyword, 0)]);
         setIsLoading(false);
     }, []);
 
@@ -175,14 +178,21 @@ export default function Transactions() {
         await fetchPageData(searchKeyword, page + 1);
         setLoadingMore(false);
     };
-
+    const TYPE_STYLES = {
+        INCOME: 'text-emerald-400 group-hover:text-emerald-300',
+        EXPENSE: 'text-red-600 group-hover:text-red-500',
+        ALLOCATION: 'text-blue-400 group-hover:text-blue-300'
+    };
+    const TYPE_SYMBOL = {
+        INCOME: '+',
+        EXPENSE: '-',
+        ALLOCATION: ''
+    };
     /* -------------------------
        SEARCH DEBOUNCE
     ------------------------- */
     useEffect(() => {
-        const timer = setTimeout(() => {
-            loadInitialData(searchKeyword);
-        }, 500);
+        const timer = setTimeout(() => loadInitialData(searchKeyword), 500);
         return () => clearTimeout(timer);
     }, [searchKeyword, loadInitialData]);
 
@@ -193,11 +203,8 @@ export default function Transactions() {
         if (txn) {
             setEditingId(txn.id);
             setFormData({
-                type: txn.type,
-                description: txn.description,
-                amount: txn.amount,
-                category: txn.category || 'OTHER',
-                source: txn.source || 'CASH',
+                type: txn.type, description: txn.description, amount: txn.amount,
+                category: txn.category || 'OTHER', source: txn.source || 'CASH',
                 transactionDate: txn.transactionDate ? new Date(txn.transactionDate).toISOString().split('T')[0] : ''
             });
         } else {
@@ -212,11 +219,8 @@ export default function Transactions() {
         setIsSubmitting(true);
         try {
             const payload = { ...formData, amount: parseFloat(formData.amount) };
-            if (editingId) {
-                await updateTransaction(editingId, payload);
-            } else {
-                await createTransaction(payload);
-            }
+            if (editingId) await updateTransaction(editingId, payload);
+            else await createTransaction(payload);
             setIsModalOpen(false);
             await loadInitialData(searchKeyword);
         } catch {
@@ -240,96 +244,158 @@ export default function Transactions() {
        RENDER
     ============================ */
     return (
-        <div className="min-h-screen bg-black text-zinc-100 p-6 md:p-10">
-
+        <div className="min-h-screen bg-black text-zinc-100 p-6 md:p-10 font-sans">
             {/* HEADER */}
-            <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="mb-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
                 <div>
-                    <h2 className="text-4xl font-bold mb-2 tracking-tight">Transactions</h2>
+                    <h2 className="text-4xl font-bold mb-2 tracking-tight text-white">Transactions</h2>
                     <p className="text-zinc-500 text-lg">Overview of your financial activity</p>
                 </div>
-                <button
-                    onClick={() => openModal()}
-                    className="flex items-center justify-center gap-2 bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-zinc-200 transition-colors"
-                >
-                    <Plus size={18} /> Add Entry
-                </button>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                    {/* Added Search Bar */}
+                    <div className="relative group">
+                        <Search className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 transition-colors group-focus-within:text-white" />
+                        <input
+                            type="text"
+                            placeholder="Search transactions..."
+                            value={searchKeyword}
+                            onChange={(e) => setSearchKeyword(e.target.value)}
+                            className="w-full sm:w-64 bg-zinc-900/50 border border-white/10 rounded-full pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/30 focus:bg-zinc-900 focus:ring-4 focus:ring-white/5 transition-all duration-300 placeholder:text-zinc-600"
+                        />
+                    </div>
+
+                    <button
+                        onClick={() => openModal()}
+                        className="group flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-full font-medium hover:bg-zinc-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all duration-300 active:scale-95"
+                    >
+                        <Plus size={18} className="transition-transform duration-300 group-hover:rotate-90" />
+                        <span>Add Entry</span>
+                    </button>
+                </div>
             </div>
 
             {/* STATS */}
-            <div className="grid md:grid-cols-3 gap-6 mb-10">
+            <div className="grid md:grid-cols-4 gap-6 mb-10">
                 <StatCard label="Total Income" value={stats.totalIncome} type="INCOME" />
                 <StatCard label="Total Expense" value={stats.totalExpense} type="EXPENSE" />
+                <StatCard label="Total Stashes" value={stats.totalAllocated} type="ALLOCATED" />
                 <StatCard label="Net Position" value={stats.netSavings} />
             </div>
 
-            {/* SEARCH */}
-            <div className="mb-6 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
-                <input
-                    value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                    placeholder="Search transactions..."
-                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl pl-11 py-3.5 text-white outline-none focus:border-white/20 transition-colors placeholder:text-zinc-600"
-                />
-            </div>
-
             {/* LIST */}
-            <div className="bg-black border border-white/10 rounded-2xl overflow-hidden">
+            <div className="space-y-3 mt-8">
+                <h3 className="text-xl font-semibold text-white mb-6 border-b border-white/5 pb-4">
+                    Transaction History
+                </h3>
+
                 {isLoading && page === 0 ? (
-                    <div className="h-64 flex justify-center items-center">
+                    <div className="h-40 flex justify-center items-center">
                         <Loader2 className="w-8 h-8 animate-spin text-zinc-600" />
                     </div>
                 ) : transactions.length === 0 ? (
-                    <div className="h-64 flex flex-col justify-center items-center text-zinc-600 border-dashed border border-zinc-800 m-4 rounded-xl bg-zinc-900/20">
+                    <div className="py-16 flex flex-col justify-center items-center text-zinc-600 border-dashed border border-zinc-800 rounded-2xl bg-zinc-900/20">
                         <Filter size={32} className="mb-3 opacity-50" />
-                        <p className="font-medium">No transactions found</p>
+                        <p className="font-medium text-zinc-400">No transactions found</p>
+                        <p className="text-sm mt-1">Try adjusting your search or add a new entry.</p>
                     </div>
                 ) : (
-                    <div className="divide-y divide-white/5">
-                        {transactions.map((txn) => (
-                            <div key={txn.id} className="p-5 flex justify-between items-center hover:bg-zinc-900/40 transition-colors group">
-                                <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${txn.type === 'INCOME' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
-                                        {txn.type === 'INCOME' ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
-                                    </div>
+                    transactions.map((txn) => {
+                        const isIncome = txn.type === 'INCOME';
+                        const isAllocated = txn.type === 'ALLOCATED';
+                        return (
+                            <div
+                                key={txn.id}
+                                className="group relative bg-zinc-900/30 border border-white/5 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-zinc-900/70 hover:border-white/10 hover:shadow-xl hover:shadow-black/50 transition-all duration-300 overflow-hidden"
+                            >
+                                {/* Left Color Accent Bar */}
+                                <div
+                                    className={`absolute left-0 top-0 bottom-0 w-1 transition-colors duration-300 ${
+                                        isAllocated
+                                            ? 'bg-cyan-500/40 group-hover:bg-cyan-400'
+                                            : isIncome
+                                                ? 'bg-emerald-500/40 group-hover:bg-emerald-400'
+                                                : 'bg-rose-500/40 group-hover:bg-rose-400'
+                                    }`}
+                                />
+                                <div className="flex items-center gap-4 pl-2">
+                                    {/* Icon Container */}
+                                    <div
+                                        className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-all duration-300 group-hover:scale-110 shadow-inner ${
+                                            isAllocated
+                                                ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 group-hover:bg-cyan-500/20'
+                                                : isIncome
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20'
+                                                    : 'bg-rose-500/10 border-rose-500/20 text-rose-400 group-hover:bg-rose-500/20'
+                                    
+                                    }`}>
+                                        {isIncome ? (
+                                            <ArrowUp size={20} strokeWidth={2.5} />
+                                        ) : isAllocated ? (
+                                            <Wallet size={20} strokeWidth={2.5} />
+                                        ) : (
+                                            <ArrowDown size={20} strokeWidth={2.5} />
+                                        )}                                    </div>
+
+                                    {/* Transaction Details */}
                                     <div>
-                                        <p className="font-bold text-white text-base">{txn.description}</p>
-                                        <div className="text-xs text-zinc-500 flex gap-2 mt-1 font-medium tracking-wide">
-                                            <span>{formatDate(txn.transactionDate)}</span>
-                                            <span>•</span>
-                                            <span>{formatEnumText(txn.category)}</span>
+                                        <p className="font-bold text-white text-lg group-hover:text-zinc-100 transition-colors">
+                                            {txn.description}
+                                        </p>
+                                        <div className="text-xs text-zinc-500 flex items-center gap-2 mt-1 font-medium tracking-wide">
+                                            <span className="bg-black/50 px-2 py-0.5 rounded-md border border-white/5">
+                                                {formatDate(txn.transactionDate)}
+                                            </span>
+                                            <span className="opacity-50">•</span>
+                                            <span className="uppercase text-[10px] tracking-wider text-zinc-400">
+                                                {formatEnumText(txn.category)}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-6">
-                                    <span className={`font-mono text-lg font-bold ${txn.type === 'INCOME' ? 'text-emerald-400' : 'text-white'}`}>
-                                        {txn.type === 'INCOME' ? '+' : '-'}{formatCurrency(txn.amount)}
+
+                                {/* Amount & Actions */}
+                                <div className="flex items-center justify-between sm:justify-end gap-6 pl-16 sm:pl-0">
+                                    <span
+                                       className={`font-mono text-xl font-bold tracking-tight transition-colors duration-300 ${
+                                             TYPE_STYLES[txn.type] || 'text-blue-300'
+                                       }`}
+                                    >
+                                        {TYPE_SYMBOL[txn.type]}{formatCurrency(txn.amount)}
                                     </span>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openModal(txn)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors">
+
+                                    {/* Reveal Actions on Hover */}
+                                    <div className="flex gap-1.5 opacity-100 sm:opacity-0 sm:-translate-x-2 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
+                                        <button
+                                            onClick={() => openModal(txn)}
+                                            className="p-2.5 bg-zinc-800/50 hover:bg-zinc-700 rounded-xl text-zinc-400 hover:text-white transition-all hover:scale-105 active:scale-95 border border-white/5"
+                                            title="Edit"
+                                        >
                                             <Edit2 size={16} />
                                         </button>
-                                        <button onClick={() => handleDelete(txn.id)} className="p-2 hover:bg-red-900/20 rounded-lg text-zinc-400 hover:text-red-400 transition-colors">
+                                        <button
+                                            onClick={() => handleDelete(txn.id)}
+                                            className="p-2.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl text-rose-500 hover:text-rose-400 transition-all hover:scale-105 active:scale-95 border border-rose-500/10"
+                                            title="Delete"
+                                        >
                                             <Trash2 size={16} />
                                         </button>
                                     </div>
                                 </div>
                             </div>
-                        ))}
-                    </div>
+                        );
+                    })
                 )}
             </div>
-
             {/* LOAD MORE BUTTON */}
             {hasMore && (
                 <div className="mt-8 flex justify-center pb-8">
                     <button
                         onClick={handleLoadMore}
                         disabled={loadingMore}
-                        className="flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-zinc-800 text-white rounded-full font-medium hover:bg-zinc-800 hover:border-zinc-700 transition-all active:scale-95 disabled:opacity-50"
+                        className="group flex items-center gap-2 px-6 py-3 bg-zinc-900 border border-zinc-800 text-white rounded-full font-medium hover:bg-zinc-800 hover:border-zinc-600 hover:shadow-lg transition-all duration-300 active:scale-95 disabled:opacity-50"
                     >
-                        {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4" />}
+                        {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />}
                         <span>{loadingMore ? 'Loading...' : 'Load Older Transactions'}</span>
                     </button>
                 </div>
@@ -337,55 +403,55 @@ export default function Transactions() {
 
             {/* MODAL */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
-                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-[fadeIn_0.2s_ease-out]">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-[scaleIn_0.2s_ease-out]">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-xl font-bold text-white">
                                 {editingId ? 'Edit Transaction' : 'New Transaction'}
                             </h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
+                            <button onClick={() => setIsModalOpen(false)} className="p-2 -mr-2 text-zinc-500 hover:text-white hover:bg-zinc-900 rounded-full transition-all active:scale-90">
                                 <X size={20} />
                             </button>
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {/* Type Toggle */}
-                            <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-900 rounded-xl mb-4">
-                                <button type="button" onClick={() => setFormData({ ...formData, type: 'EXPENSE' })} className={`py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'EXPENSE' ? 'bg-zinc-800 text-rose-400 shadow-sm' : 'text-zinc-500 hover:text-white'}`}>
+                            <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-900/50 border border-white/5 rounded-xl mb-6">
+                                <button type="button" onClick={() => setFormData({ ...formData, type: 'EXPENSE' })} className={`py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${formData.type === 'EXPENSE' ? 'bg-zinc-800 text-rose-400 shadow-md ring-1 ring-white/5' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'}`}>
                                     Expense
                                 </button>
-                                <button type="button" onClick={() => setFormData({ ...formData, type: 'INCOME' })} className={`py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'INCOME' ? 'bg-zinc-800 text-emerald-400 shadow-sm' : 'text-zinc-500 hover:text-white'}`}>
+                                <button type="button" onClick={() => setFormData({ ...formData, type: 'INCOME' })} className={`py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${formData.type === 'INCOME' ? 'bg-zinc-800 text-emerald-400 shadow-md ring-1 ring-white/5' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'}`}>
                                     Income
                                 </button>
                             </div>
 
                             {/* Description */}
-                            <div>
-                                <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Description</label>
-                                <input required placeholder="e.g. Salary, Groceries" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20" />
+                            <div className="group">
+                                <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block group-focus-within:text-zinc-300 transition-colors">Description</label>
+                                <input required placeholder="e.g. Salary, Groceries" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className={INPUT_BASE} />
                             </div>
 
                             {/* Amount & Date */}
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Amount</label>
-                                    <input required type="number" step="0.01" placeholder="0.00" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20 font-mono" />
+                                <div className="group">
+                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block group-focus-within:text-zinc-300 transition-colors">Amount</label>
+                                    <input required type="number" step="0.01" placeholder="0.00" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className={`${INPUT_BASE} font-mono`} />
                                 </div>
-                                <div>
-                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Date</label>
-                                    <input required type="date" value={formData.transactionDate} onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })} className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20 scheme-dark" />
+                                <div className="group">
+                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block group-focus-within:text-zinc-300 transition-colors">Date</label>
+                                    <input required type="date" value={formData.transactionDate} onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })} className={`${INPUT_BASE} scheme-dark cursor-pointer`} />
                                 </div>
                             </div>
 
                             {/* Category & Source */}
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Category</label>
+                                <div className="group">
+                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block group-focus-within:text-zinc-300 transition-colors">Category</label>
                                     <select
                                         required
                                         value={formData.category}
                                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                        className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20 appearance-none cursor-pointer"
+                                        className={`${INPUT_BASE} appearance-none cursor-pointer`}
                                     >
                                         {TRANSACTION_CATEGORIES.map(category => (
                                             <option key={category} value={category} className="bg-zinc-900 text-white">
@@ -394,13 +460,13 @@ export default function Transactions() {
                                         ))}
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Source</label>
+                                <div className="group">
+                                    <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block group-focus-within:text-zinc-300 transition-colors">Source</label>
                                     <select
                                         required
                                         value={formData.source}
                                         onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                                        className="w-full bg-zinc-900/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-white/20 appearance-none cursor-pointer"
+                                        className={`${INPUT_BASE} appearance-none cursor-pointer`}
                                     >
                                         {TRANSACTION_SOURCES.map(source => (
                                             <option key={source} value={source} className="bg-zinc-900 text-white">
@@ -412,7 +478,7 @@ export default function Transactions() {
                             </div>
 
                             {/* Submit Button */}
-                            <button type="submit" disabled={isSubmitting} className="w-full bg-white text-black py-3.5 rounded-xl font-bold mt-4 hover:bg-zinc-200 transition-colors disabled:opacity-70 flex justify-center items-center gap-2">
+                            <button type="submit" disabled={isSubmitting} className="w-full bg-white text-black py-3.5 rounded-xl font-bold mt-6 hover:bg-zinc-200 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all duration-300 active:scale-[0.98] disabled:opacity-70 flex justify-center items-center gap-2">
                                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {isSubmitting ? 'Saving...' : 'Save Transaction'}
                             </button>
@@ -420,6 +486,18 @@ export default function Transactions() {
                     </div>
                 </div>
             )}
+
+            {/* Custom keyframes for smooth modal entry */}
+            <style dangerouslySetInnerHTML={{__html: `
+                @keyframes scaleIn {
+                    from { opacity: 0; transform: scale(0.95); }
+                    to { opacity: 1; transform: scale(1); }
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            `}} />
         </div>
     );
 }

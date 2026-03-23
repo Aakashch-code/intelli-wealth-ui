@@ -307,7 +307,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className={`${CARD_BASE} overflow-hidden`}>
-                            {data.recentTransactions.map(t => <TransactionRow key={t.id} transaction={t} />)}
+                            {data.recentTransactions.slice(0, 5).map(t => <TransactionRow key={t.id} transaction={t} />)}
                             {data.recentTransactions.length === 0 && (
                                 <div className="p-12 text-center flex flex-col items-center justify-center text-zinc-500">
                                     <Receipt className="w-8 h-8 mb-3 opacity-20" />

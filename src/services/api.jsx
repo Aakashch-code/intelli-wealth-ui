@@ -82,8 +82,6 @@ export const addSpentAmount = (id, data) => {
 export const fetchGoals = (page = 0, size = 12) => {
     return api.get('/goal', { params: { page, size } });
 };
-export const fetchGoalById = (id) =>
-    api.get(`/goal/${id}`);
 
 export const createGoal = (data) =>
     api.post('/goal', data);
@@ -94,13 +92,12 @@ export const updateGoal = (id, data) =>
 export const deleteGoal = (id) =>
     api.delete(`/goal/${id}`);
 
-export const deleteAllGoals = () =>
-    api.delete('/goal/delete-all');
-
 export const fetchGoalStats = () =>
     api.get('/goal/stats');
 
-
+export const addStash = (id, amount) => {
+    return api.put(`/goals/${id}/stash`, { amount });
+};
 /* --- Subscriptions --- */
 export const fetchSubscriptions = (active = null, page = 0, size = 12) => {
     const params = { page, size };
