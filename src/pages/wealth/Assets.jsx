@@ -12,21 +12,26 @@ import {
     TrendingUp,
     RefreshCw,
     Car,
-    Landmark
+    Landmark,
+    Download,
+    PieChart,
+    Layers
 } from 'lucide-react';
 import {
     fetchAssets,
     createAsset,
     updateAsset,
     deleteAsset,
-    allAssetsAmount
+    allAssetsAmount,
+    fetchCategoryTotals,       // Imported
+    fetchMainCategoryTotals,   // Imported
+    exportAssetsPdf
 } from "../../services/api.jsx";
 
 // ============================================================================
 // CONFIGURATION (Matches Java AssetAttributeRules)
 // ============================================================================
 
-// 1. Map Categories to specific field requirements
 const CATEGORY_RULES = {
     REAL_ESTATE: [
         { key: 'location', label: 'Location', type: 'text', placeholder: 'e.g. Pune, Maharashtra' },
@@ -70,13 +75,11 @@ const CATEGORY_RULES = {
     ]
 };
 
-// 2. Helper to determine Main Category (Financial vs Physical)
 const getMainCategory = (category) => {
     const physical = ['REAL_ESTATE', 'VEHICLE', 'GOLD'];
     return physical.includes(category) ? 'PHYSICAL' : 'FINANCIAL';
 };
 
-// 3. UI Helper for Icons
 const getAssetIcon = (category) => {
     switch (category) {
         case 'REAL_ESTATE': return Building2;
@@ -104,7 +107,10 @@ const formatINR = (val) =>
 export default function Assets() {
     const [assets, setAssets] = useState([]);
     const [totalValue, setTotalValue] = useState(0);
+    const [categoryTotals, setCategoryTotals] = useState({});       // Dynamic Map state
+    const [mainCategoryTotals, setMainCategoryTotals] = useState({}); // Dynamic Map state
     const [loading, setLoading] = useState(true);
+    const [exporting, setExporting] = useState(false);
 
     // UI State
     const [modalOpen, setModalOpen] = useState(false);
@@ -113,13 +119,12 @@ export default function Assets() {
     const [deletingId, setDeletingId] = useState(null);
     const [formLoading, setFormLoading] = useState(false);
 
-    // Form State (Aligned with JSON Structure)
     const [formData, setFormData] = useState({
         name: '',
         category: '',
         currentValue: '',
-        dateAcquired: new Date().toISOString().split('T')[0], // Default today
-        attributes: {} // Dynamic bucket
+        dateAcquired: new Date().toISOString().split('T')[0],
+        attributes: {}
     });
 
     useEffect(() => {
@@ -129,12 +134,18 @@ export default function Assets() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [listResponse, totalResponse] = await Promise.all([
-                fetchAssets(),
-                allAssetsAmount()
+            const [listResponse, totalResponse, catResponse, mainCatResponse] = await Promise.all([
+                fetchAssets(0, 50),
+                allAssetsAmount(),
+                fetchCategoryTotals(),
+                fetchMainCategoryTotals()
             ]);
-            setAssets(listResponse.data || []);
+
+            const assetData = listResponse.data.content || listResponse.data || [];
+            setAssets(assetData);
             setTotalValue(totalResponse.data || 0);
+            setCategoryTotals(catResponse.data || {});
+            setMainCategoryTotals(mainCatResponse.data || {});
         } catch (error) {
             console.error("Error fetching data:", error);
         } finally {
@@ -147,11 +158,10 @@ export default function Assets() {
     const openModal = (asset = null) => {
         setEditingAsset(asset);
         if (asset) {
-            // Flatten logic if editing (assuming backend returns nested attributes)
             setFormData({
                 name: asset.name,
                 category: asset.category,
-                currentValue: asset.currentValue || asset.value, // Handle potential naming diffs
+                currentValue: asset.currentValue || asset.value,
                 dateAcquired: asset.dateAcquired,
                 attributes: asset.attributes || {}
             });
@@ -167,11 +177,9 @@ export default function Assets() {
         setModalOpen(true);
     };
 
-    // Handle Top Level Fields (Name, Value, Category)
     const handleMainChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => {
-            // If category changes, reset attributes
             if (name === 'category') {
                 return { ...prev, category: value, attributes: {} };
             }
@@ -179,7 +187,6 @@ export default function Assets() {
         });
     };
 
-    // Handle Dynamic Attribute Fields
     const handleAttributeChange = (key, value) => {
         setFormData(prev => ({
             ...prev,
@@ -194,10 +201,9 @@ export default function Assets() {
         e.preventDefault();
         setFormLoading(true);
 
-        // Construct Payload matching your JSON example
         const payload = {
             name: formData.name,
-            mainCategory: getMainCategory(formData.category), // Auto-calculate
+            mainCategory: getMainCategory(formData.category),
             category: formData.category,
             currentValue: parseFloat(formData.currentValue),
             dateAcquired: formData.dateAcquired,
@@ -232,6 +238,26 @@ export default function Assets() {
         }
     };
 
+    const handleExportPdf = async () => {
+        setExporting(true);
+        try {
+            const response = await exportAssetsPdf();
+            const file = new Blob([response.data], { type: 'application/pdf' });
+            const fileURL = URL.createObjectURL(file);
+
+            const link = document.createElement('a');
+            link.href = fileURL;
+            link.download = `assets_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error("Error exporting PDF:", error);
+        } finally {
+            setExporting(false);
+        }
+    };
+
     // --- Render ---
 
     if (loading) {
@@ -250,33 +276,132 @@ export default function Assets() {
                     <h2 className="text-4xl font-bold tracking-tight mb-2">Assets</h2>
                     <p className="text-zinc-500 text-lg">Your portfolio overview</p>
                 </div>
-                <button
-                    onClick={() => openModal()}
-                    className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-zinc-200 transition-all"
-                >
-                    <Plus className="w-5 h-5" />
-                    <span>Add Asset</span>
-                </button>
-            </div>
 
-            {/* Total Value Card */}
-            <div className="mb-10">
-                <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-8 max-w-sm">
-                    <div className="flex items-center gap-3 mb-2 text-emerald-400">
-                        <TrendingUp className="w-5 h-5" />
-                        {/* CHANGED TEXT HERE */}
-                        <span className="text-sm font-bold uppercase tracking-wider">Total Asset Value</span>
-                    </div>
-                    <div className="text-4xl font-bold text-white">
-                        {formatINR(totalValue)}
-                    </div>
-                    <div className="mt-2 text-sm text-zinc-500">
-                        Calculated from {assets.length} assets
-                    </div>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleExportPdf}
+                        disabled={exporting}
+                        className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 text-white px-6 py-3 rounded-full font-bold hover:bg-zinc-800 transition-all disabled:opacity-50"
+                    >
+                        {exporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                        <span className="hidden sm:inline">Export PDF</span>
+                    </button>
+                    <button
+                        onClick={() => openModal()}
+                        className="flex items-center gap-2 bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-zinc-200 transition-all"
+                    >
+                        <Plus className="w-5 h-5" />
+                        <span>Add Asset</span>
+                    </button>
                 </div>
             </div>
 
-            {/* Grid */}
+            {/* Unified Analytics Dashboard Panel */}
+            <div className="mb-10 bg-black border border-white/10 rounded-2xl overflow-hidden">
+
+                <div className="p-6 lg:p-8">
+                    {/* Top Section: Hero Metrics */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/10 pb-8 mb-8">
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <TrendingUp className="w-5 h-5 text-emerald-500" />
+                                <span className="text-xs font-bold uppercase tracking-widest text-emerald-500">Portfolio Overview</span>
+                            </div>
+                            <div className="text-4xl md:text-3xl font-black text-white tracking-tight">
+                                {formatINR(totalValue)}
+                            </div>
+                        </div>
+
+                        <div className="mt-6 md:mt-0 flex items-center gap-4">
+                            <div className="flex flex-col items-end px-5 py-3 bg-black rounded-xl border border-white/10">
+                                <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Active Assets</span>
+                                <span className="text-xl font-bold text-white">{assets.length}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Bottom Section: Side-by-Side Distribution */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
+
+                        {/* Left: Main Categories (Macro Allocation) */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-6">
+                                <Layers className="w-4 h-4 text-zinc-500" />
+                                <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Macro Allocation</span>
+                            </div>
+
+                            <div className="space-y-6">
+                                {Object.entries(mainCategoryTotals).length === 0 ? (
+                                    <p className="text-xs text-zinc-600 italic">No allocation data available</p>
+                                ) : (
+                                    Object.entries(mainCategoryTotals).map(([mainCat, amt]) => {
+                                        const percentage = totalValue > 0 ? (amt / totalValue) * 100 : 0;
+                                        return (
+                                            <div key={mainCat} className="group cursor-default">
+                                                <div className="flex justify-between items-baseline mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-zinc-300 tracking-wider uppercase text-xs">{mainCat}</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-900 border border-white/5 text-zinc-400 font-bold">{percentage.toFixed(1)}%</span>
+                                                    </div>
+                                                    <span className="font-bold text-white text-sm">{formatINR(amt)}</span>
+                                                </div>
+                                                <div className="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden">
+                                                    <div
+                                                        className="bg-zinc-500 h-full rounded-full transition-all duration-700 ease-out group-hover:bg-emerald-500"
+                                                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Right: Sub-Categories (Granular Breakdown) */}
+                        <div className="relative">
+                            {/* Vertical divider for large screens */}
+                            <div className="hidden lg:block absolute -left-8 top-0 bottom-0 w-px bg-white/10"></div>
+
+                            <div className="flex items-center gap-2 mb-6">
+                                <PieChart className="w-4 h-4 text-zinc-500" />
+                                <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Asset Class Breakdown</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[180px] overflow-y-auto custom-scrollbar pr-2">
+                                {Object.entries(categoryTotals).length === 0 ? (
+                                    <p className="text-xs text-zinc-600 italic">No granular details available</p>
+                                ) : (
+                                    Object.entries(categoryTotals).map(([cat, amt]) => {
+                                        const percentage = totalValue > 0 ? (amt / totalValue) * 100 : 0;
+                                        return (
+                                            <div key={cat} className="bg-black rounded-xl p-4 border border-white/10 hover:border-emerald-500/50 transition-colors group">
+                                                <div className="flex justify-between items-center mb-2">
+                                        <span className="text-zinc-500 uppercase tracking-wider text-[10px] font-bold truncate pr-2 group-hover:text-zinc-400 transition-colors">
+                                            {cat.replace('_', ' ')}
+                                        </span>
+                                                    <span className="text-[10px] font-bold text-emerald-500">{percentage.toFixed(1)}%</span>
+                                                </div>
+                                                <div className="font-bold text-white text-sm mb-3">
+                                                    {formatINR(amt)}
+                                                </div>
+                                                <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="bg-emerald-500/80 h-full rounded-full"
+                                                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            {/* Asset Display Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {assets.length === 0 ? (
                     <div className="col-span-full py-20 text-center border border-dashed border-zinc-800 rounded-2xl">
@@ -307,7 +432,6 @@ export default function Assets() {
                                     </span>
                                 </div>
 
-                                {/* Mini details preview (first 2 attributes) */}
                                 <div className="grid grid-cols-2 gap-2 mb-4">
                                     {asset.attributes && Object.entries(asset.attributes).slice(0, 2).map(([key, val]) => (
                                         <div key={key} className="bg-zinc-900/30 p-2 rounded text-xs">
@@ -352,7 +476,6 @@ export default function Assets() {
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-5">
-                            {/* --- BASE FIELDS --- */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
                                     <label className="text-xs text-zinc-500 uppercase font-bold ml-1 mb-1 block">Asset Name</label>
@@ -405,7 +528,6 @@ export default function Assets() {
                                 </div>
                             </div>
 
-                            {/* --- DYNAMIC ATTRIBUTES (Based on Category) --- */}
                             {formData.category && CATEGORY_RULES[formData.category] && (
                                 <div className="pt-4 border-t border-zinc-800/50 animate-in fade-in slide-in-from-top-4 duration-300">
                                     <h4 className="text-sm font-bold text-emerald-500 mb-3 uppercase tracking-wider">
@@ -455,7 +577,7 @@ export default function Assets() {
                 </div>
             )}
 
-            {/* Delete Confirmation Modal (Same as before) */}
+            {/* Delete Confirmation Modal */}
             {deleteConfirmOpen && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-sm w-full p-6 text-center">

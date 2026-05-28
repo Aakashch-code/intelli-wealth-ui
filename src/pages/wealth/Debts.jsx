@@ -224,10 +224,8 @@ export default function Debts() {
             </div>
 
             {/* --- Stats Cards (Raw Backend Data) --- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10 max-w-4xl">
-
-                {/* Card 1: Total Debt Amount (e.g., Original Principal/Limit) */}
-                <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-8 relative overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mb-10">
+                <div className="bg-black border border-white/10 rounded-2xl p-8 relative overflow-hidden flex flex-col justify-center">
                     <div className="absolute top-0 right-0 p-8 opacity-10">
                         <PieChart className="w-24 h-24 text-rose-500" />
                     </div>
@@ -235,16 +233,16 @@ export default function Debts() {
                         <PieChart className="w-5 h-5" />
                         <span className="text-sm font-bold uppercase tracking-wider">Total Liability</span>
                     </div>
-                    <div className="text-4xl font-bold text-white mb-2">
+                    <div className="text-4xl font-bold text-white mb-2 z-10 relative">
                         {formatINR(stats.totalDebtAmount)}
                     </div>
-                    <div className="text-sm text-zinc-500">
+                    <div className="text-sm text-zinc-500 z-10 relative">
                         Total debt value recorded
                     </div>
                 </div>
 
                 {/* Card 2: Total Outstanding (Current Pending) */}
-                <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-8 relative overflow-hidden">
+                <div className="bg-black border border-white/10 rounded-2xl p-8 relative overflow-hidden flex flex-col justify-center">
                     <div className="absolute top-0 right-0 p-8 opacity-10">
                         <TrendingDown className="w-24 h-24 text-blue-500" />
                     </div>
@@ -252,10 +250,10 @@ export default function Debts() {
                         <TrendingDown className="w-5 h-5" />
                         <span className="text-sm font-bold uppercase tracking-wider">Current Outstanding</span>
                     </div>
-                    <div className="text-4xl font-bold text-white mb-2">
+                    <div className="text-4xl font-bold text-white mb-2 z-10 relative">
                         {formatINR(stats.totalOutstandingAmount)}
                     </div>
-                    <div className="text-sm text-zinc-500">
+                    <div className="text-sm text-zinc-500 z-10 relative">
                         Remaining amount to be paid
                     </div>
                 </div>

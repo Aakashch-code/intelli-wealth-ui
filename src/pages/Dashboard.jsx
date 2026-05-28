@@ -203,8 +203,18 @@ export default function Dashboard() {
                 },
                 recentTransactions: resolve(5)?.content || (Array.isArray(resolve(5)) ? resolve(5).slice(0, 5) : []),
                 recentGoals: resolve(6)?.content || (Array.isArray(resolve(6)) ? resolve(6) : []),
-                recentAssets: Array.isArray(resolve(7)) ? resolve(7).slice(0, 4) : [],
-                recentDebts: Array.isArray(resolve(8)) ? resolve(8).slice(0, 4) : [],
+                recentAssets: (() => {
+                    const rawAssets = resolve(7);
+                    // 1. Safely extract the array just like in NetWorth
+                    const assetsArray = Array.isArray(rawAssets)
+                        ? rawAssets
+                        : (rawAssets?.content || rawAssets?.data || []);
+
+                    // 2. Sort to actually get the "Top" assets, then grab the top 4
+                    return [...assetsArray]
+                        .sort((a, b) => (b.currentValue || b.value || 0) - (a.currentValue || a.value || 0))
+                        .slice(0, 4);
+                })(),                recentDebts: Array.isArray(resolve(8)) ? resolve(8).slice(0, 4) : [],
                 debtTotal: safeNumber(debtStats?.totalOutstandingAmount ?? 0)
             });
         } catch (err) {

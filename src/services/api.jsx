@@ -80,20 +80,20 @@ export const addSpentAmount = (id, data) => {
 /* --- Goals --- */
 // In your api.jsx
 export const fetchGoals = (page = 0, size = 12) => {
-    return api.get('/goal', { params: { page, size } });
+    return api.get('/goals', { params: { page, size } });
 };
 
 export const createGoal = (data) =>
-    api.post('/goal', data);
+    api.post('/goals', data);
 
 export const updateGoal = (id, data) =>
-    api.put(`/goal/${id}`, data);
+    api.put(`/goals/${id}`, data);
 
 export const deleteGoal = (id) =>
-    api.delete(`/goal/${id}`);
+    api.delete(`/goals/${id}`);
 
 export const fetchGoalStats = () =>
-    api.get('/goal/stats');
+    api.get('/goals/stats');
 
 export const addStash = (id, amount) => {
     return api.put(`/goals/${id}/stash`, { amount });
@@ -146,8 +146,10 @@ export const fetchTransactionNetAmount = () =>
    ================================================================= */
 
 /* --- Assets --- */
-export const fetchAssets = () =>
-    api.get('/assets');
+
+// Note: Ensure your axios base URL handles the "/api" prefix if not included below.
+export const fetchAssets = (page = 0, size = 20) =>
+    api.get(`/assets?page=${page}&size=${size}`);
 
 export const fetchAssetById = (id) =>
     api.get(`/assets/${id}`);
@@ -162,8 +164,13 @@ export const deleteAsset = (id) =>
     api.delete(`/assets/${id}`);
 
 export const allAssetsAmount = () =>
-    api.get('/assets/total-value');
+    api.get('/assets/analytics/total-value');
 
+export const fetchCategoryTotals = () =>
+    api.get('/assets/analytics/category-totals');
+
+export const fetchMainCategoryTotals = () =>
+    api.get('/assets/analytics/main-category-totals');
 
 /* --- Debt --- */
 export const fetchDebts = () =>
@@ -183,6 +190,10 @@ export const deleteDebt = (id) =>
 
 export const fetchDebtStats = () =>
     api.get('/debts/stats');
+
+export const fetchEmiStats = () =>
+    api.get('/debts/emi');
+
 
 
 /* --- Net Worth --- */
