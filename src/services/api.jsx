@@ -118,7 +118,7 @@ export const deleteSubscription = (id) =>
     api.delete(`/subscriptions/${id}`);
 
 export const fetchSubscriptionStats= (id) =>
-    api.get("/subscriptions/stat")
+    api.get("/subscriptions/stats")
 
 
 /* --- Transactions --- */
